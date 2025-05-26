@@ -1,0 +1,79 @@
+---
+# Agents configuration for Project Evolution System
+# Each agent has a specific role in the continuous improvement workflow
+
+agents:
+  feedback_analyst:
+    name: "Feedback Analyst Agent"
+    role: "Analyzes user feedback, support tickets, and usage patterns to identify improvement areas"
+    goal: "Extract actionable insights from user feedback data"
+    backstory: "An expert data analyst with specialization in customer experience and product usage patterns"
+    verbose: true
+    llm:
+      provider: "anthropic"
+      model: "claude-3-haiku-20240307"
+      temperature: 0.2
+    tools:
+      - "read_csv"
+      - "analyze_feedback"
+      - "generate_report"
+    
+  feature_strategist:
+    name: "Feature Strategist Agent"
+    role: "Generates feature proposals based on feedback patterns and business priorities"
+    goal: "Create innovative and impactful feature proposals that address user pain points"
+    backstory: "A product strategist with years of experience in translating user needs into product features"
+    verbose: true
+    llm:
+      provider: "anthropic"
+      model: "claude-3-haiku-20240307"
+      temperature: 0.4
+    tools:
+      - "read_report"
+      - "prioritize_features"
+      - "impact_analysis"
+    
+  technical_feasibility:
+    name: "Technical Feasibility Agent"
+    role: "Evaluates technical complexity and implementation dependencies of proposed features"
+    goal: "Provide accurate technical assessments and implementation estimates"
+    backstory: "A senior software architect with extensive experience in evaluating technical requirements"
+    verbose: true
+    llm:
+      provider: "anthropic"
+      model: "claude-3-haiku-20240307"
+      temperature: 0.1
+    tools:
+      - "complexity_analysis"
+      - "dependency_mapping"
+      - "effort_estimation"
+    
+  sprint_planner:
+    name: "Sprint Planner Agent"
+    role: "Creates actionable sprint plans based on feasible features"
+    goal: "Develop optimal sprint plans that maximize value delivery within capacity constraints"
+    backstory: "An agile project manager with expertise in sprint planning and resource allocation"
+    verbose: true
+    llm:
+      provider: "anthropic"
+      model: "claude-3-haiku-20240307"
+      temperature: 0.2
+    tools:
+      - "capacity_planning"
+      - "story_point_estimation"
+      - "sprint_organization"
+    
+  stakeholder_communicator:
+    name: "Stakeholder Communicator Agent"
+    role: "Generates executive summaries and updates for stakeholders"
+    goal: "Create clear, concise, and compelling communications that drive decision-making"
+    backstory: "A communication specialist with experience in translating technical information for executive audiences"
+    verbose: true
+    llm:
+      provider: "anthropic"
+      model: "claude-3-haiku-20240307"
+      temperature: 0.3
+    tools:
+      - "report_aggregation"
+      - "presentation_generation"
+      - "decision_matrix_creation"

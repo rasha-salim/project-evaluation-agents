@@ -1,0 +1,50 @@
+date,user_id,feedback_type,description,severity,feature_area
+2025-04-01,user123,bug,"Search results are inconsistent when using special characters",4,Search
+2025-04-02,user456,feature_request,"Would like to save search queries for future use",3,Search
+2025-04-03,user789,performance,"Dashboard takes too long to load with many widgets",5,Dashboard
+2025-04-05,user234,usability,"Can't easily find how to export data to CSV",4,Reporting
+2025-04-06,user567,bug,"Error message when trying to share report with external users",4,Sharing
+2025-04-07,user890,feature_request,"Need ability to schedule recurring reports",3,Reporting
+2025-04-08,user321,usability,"Too many clicks required to create a new analysis",3,Analysis
+2025-04-09,user654,bug,"Filters don't persist when switching between tabs",4,Navigation
+2025-04-10,user987,performance,"PDF export process freezes for large reports",5,Reporting
+2025-04-11,user111,feature_request,"Would like dark mode option for reduced eye strain",2,UI/UX
+2025-04-12,user222,bug,"Some charts don't display correctly on mobile devices",3,Visualization
+2025-04-13,user333,usability,"Difficult to understand error messages for non-technical users",4,Error Handling
+2025-04-14,user444,performance,"API response times are slow during peak hours",5,API
+2025-04-15,user555,feature_request,"Need more granular access control for sensitive data",4,Security
+2025-04-16,user666,bug,"Session timeout occurs too quickly without warning",3,Authentication
+2025-04-17,user777,usability,"Terminology in the UI is inconsistent and confusing",3,UI/UX
+2025-04-18,user888,performance,"Memory usage grows over time, requiring restart",4,Performance
+2025-04-19,user999,feature_request,"Would like to customize dashboard layout more freely",3,Dashboard
+2025-04-20,user112,bug,"Notifications sometimes don't appear until page refresh",3,Notifications
+2025-04-21,user223,usability,"Help documentation is outdated and hard to search",4,Documentation
+2025-04-22,user334,performance,"Large data exports timeout before completing",5,Data Export
+2025-04-23,user445,feature_request,"Need integration with Microsoft Teams for alerts",3,Integrations
+2025-04-24,user556,bug,"Custom field values don't save properly in some forms",4,Forms
+2025-04-25,user667,usability,"Date picker is difficult to use for selecting date ranges",3,UI/UX
+2025-04-26,user778,performance,"Query builder becomes unresponsive with complex queries",4,Query Builder
+2025-04-27,user889,feature_request,"Would like to create custom templates for reports",3,Reporting
+2025-04-28,user113,bug,"Some data visualizations show incorrect totals",5,Visualization
+2025-04-29,user224,usability,"Can't easily compare data across different time periods",4,Analysis
+2025-04-30,user335,performance,"Real-time collaboration features lag with multiple users",4,Collaboration
+2025-05-01,user446,feature_request,"Need ability to annotate reports with comments",2,Collaboration
+2025-05-02,user557,bug,"User permissions don't apply correctly to shared dashboards",4,Security
+2025-05-03,user668,usability,"Too difficult to find recently viewed reports",3,Navigation
+2025-05-04,user779,performance,"Search indexing takes too long for new content",3,Search
+2025-05-05,user881,feature_request,"Would like AI-powered insights from our data",4,AI Features
+2025-05-06,user114,bug,"Some dropdown menus don't display all available options",3,UI/UX
+2025-05-07,user225,usability,"Difficult to understand which filters are currently applied",4,Filtering
+2025-05-08,user336,performance,"Background data processing consumes too much CPU",4,Performance
+2025-05-09,user447,feature_request,"Need better visualization options for time-series data",3,Visualization
+2025-05-10,user558,bug,"Saved reports sometimes load with incorrect parameters",4,Reporting
+2025-05-11,user669,usability,"No clear way to see which users have access to a report",3,Security
+2025-05-12,user771,performance,"Browser crashes with very large datasets",5,Performance
+2025-05-13,user882,feature_request,"Would like to receive alerts based on data thresholds",4,Alerts
+2025-05-14,user115,bug,"Some email notifications contain broken links",3,Notifications
+2025-05-15,user226,usability,"Keyboard shortcuts are not documented or intuitive",2,Accessibility
+2025-05-16,user337,performance,"Initial login takes too long to load user preferences",3,Authentication
+2025-05-17,user448,feature_request,"Need ability to create custom calculated fields",4,Data Analysis
+2025-05-18,user559,bug,"Scheduled exports fail silently without notification",5,Automation
+2025-05-19,user661,usability,"Can't easily duplicate existing reports as templates",3,Reporting
+2025-05-20,user772,performance,"Sorting large tables causes UI freeze",4,Tables
