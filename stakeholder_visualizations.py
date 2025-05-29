@@ -21,7 +21,7 @@ def render_stakeholder_update_visualization(update_text):
     
     # Create a key achievements visualization
     achievements_html = create_achievements_visualization(update_text, metrics)
-    components.html(achievements_html, height=350)
+    components.html(achievements_html, height=500)
     
 
 def get_sample_metrics():

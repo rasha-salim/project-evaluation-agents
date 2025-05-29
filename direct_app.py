@@ -212,6 +212,13 @@ if "current_task" not in st.session_state:
     st.session_state.current_task = None
 if "task_status" not in st.session_state:
     st.session_state.task_status = {}
+# User collaboration variables
+if "user_collaboration_completed" not in st.session_state:
+    st.session_state.user_collaboration_completed = False
+if "user_feedback_notes" not in st.session_state:
+    st.session_state.user_feedback_notes = ""
+if "enhanced_feedback_analysis" not in st.session_state:
+    st.session_state.enhanced_feedback_analysis = ""
 
 # Sample feedback data
 SAMPLE_FEEDBACK = """
@@ -293,39 +300,92 @@ def create_agents_and_tasks(feedback_data):
     )
     
     # Create tasks
-    analyze_feedback_task = Task(
-        description=f"Analyze the following user feedback and identify key patterns, priorities, and insights:\n\n{feedback_data}",
-        agent=feedback_analyst,
-        expected_output="A detailed analysis of user feedback with key patterns, priorities, and actionable insights."
-    )
+    # Check if the input is enhanced feedback analysis (contains user collaboration)
+    is_enhanced_feedback = "USER COLLABORATION NOTES:" in feedback_data if isinstance(feedback_data, str) else False
     
-    generate_features_task = Task(
-        description="Based on the feedback analysis, generate 3-5 feature proposals that address the most important user needs.",
-        agent=feature_planner,
-        expected_output="A list of 3-5 feature proposals with descriptions, justifications, and expected impact.",
-        dependencies=["analyze_feedback"]
-    )
+    if is_enhanced_feedback:
+        analyze_feedback_task = Task(
+            description=f"Analyze the following user feedback which includes user collaboration notes. Pay special attention to the user's priorities and insights:\n\n{feedback_data}",
+            agent=feedback_analyst,
+            expected_output="A detailed analysis of user feedback with key patterns, priorities, and actionable insights that incorporates the user's collaboration notes."
+        )
+    else:
+        analyze_feedback_task = Task(
+            description=f"Analyze the following user feedback and identify key patterns, priorities, and insights:\n\n{feedback_data}",
+            agent=feedback_analyst,
+            expected_output="A detailed analysis of user feedback with key patterns, priorities, and actionable insights."
+        )
     
-    evaluate_feasibility_task = Task(
-        description="Evaluate the technical feasibility of the proposed features. For each feature, assess complexity, potential challenges, and estimated effort.",
-        agent=technical_evaluator,
-        expected_output="A technical evaluation of each proposed feature, including complexity rating, potential challenges, and estimated effort.",
-        dependencies=["generate_features"]
-    )
+    # Check if there are priority adjustments in the feedback data
+    priority_focus = None
+    if isinstance(feedback_data, str) and "PRIORITY ADJUSTMENT:" in feedback_data:
+        priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", feedback_data)
+        if priority_match:
+            priority_focus = priority_match.group(1).strip()
     
-    create_sprint_plan_task = Task(
-        description="Create a sprint plan based on the feature proposals and technical evaluation. Organize features into sprints and create a timeline for implementation.",
-        agent=sprint_planner,
-        expected_output="A sprint plan with features organized into sprints, estimated timelines, and resource allocation.",
-        dependencies=["evaluate_feasibility"]
-    )
+    # Create feature generation task with priority consideration
+    if priority_focus:
+        generate_features_task = Task(
+            description=f"Based on the feedback analysis, generate 3-5 feature proposals that address the most important user needs. IMPORTANT: The user has requested to {priority_focus}, so prioritize features that align with this focus.",
+            agent=feature_planner,
+            expected_output="A list of 3-5 feature proposals with descriptions, justifications, and expected impact that align with the user's priority focus.",
+            dependencies=["analyze_feedback"]
+        )
+    else:
+        generate_features_task = Task(
+            description="Based on the feedback analysis, generate 3-5 feature proposals that address the most important user needs.",
+            agent=feature_planner,
+            expected_output="A list of 3-5 feature proposals with descriptions, justifications, and expected impact.",
+            dependencies=["analyze_feedback"]
+        )
     
-    generate_update_task = Task(
-        description="Generate a clear and compelling update for stakeholders based on the feedback analysis, feature proposals, technical evaluation, and sprint plan.",
-        agent=stakeholder_communicator,
-        expected_output="A stakeholder update that clearly communicates the planned work, its value, and expected impact.",
-        dependencies=["create_sprint_plan"]
-    )
+    # Create technical evaluation task with priority consideration
+    if priority_focus:
+        evaluate_feasibility_task = Task(
+            description=f"Evaluate the technical feasibility of the proposed features. For each feature, assess complexity, potential challenges, and estimated effort. IMPORTANT: The user has requested to {priority_focus}, so pay special attention to the technical aspects that would support this priority.",
+            agent=technical_evaluator,
+            expected_output="A technical evaluation of each proposed feature, including complexity rating, potential challenges, and estimated effort, with special consideration for the user's priority focus.",
+            dependencies=["generate_features"]
+        )
+    else:
+        evaluate_feasibility_task = Task(
+            description="Evaluate the technical feasibility of the proposed features. For each feature, assess complexity, potential challenges, and estimated effort.",
+            agent=technical_evaluator,
+            expected_output="A technical evaluation of each proposed feature, including complexity rating, potential challenges, and estimated effort.",
+            dependencies=["generate_features"]
+        )
+    
+    # Create sprint planning task with priority consideration
+    if priority_focus:
+        create_sprint_plan_task = Task(
+            description=f"Create a sprint plan based on the feature proposals and technical evaluation. Organize features into sprints and create a timeline for implementation. IMPORTANT: The user has requested to {priority_focus}, so prioritize scheduling features that align with this focus in earlier sprints.",
+            agent=sprint_planner,
+            expected_output="A sprint plan with features organized into sprints, estimated timelines, and resource allocation that reflects the user's priority focus.",
+            dependencies=["evaluate_feasibility"]
+        )
+    else:
+        create_sprint_plan_task = Task(
+            description="Create a sprint plan based on the feature proposals and technical evaluation. Organize features into sprints and create a timeline for implementation.",
+            agent=sprint_planner,
+            expected_output="A sprint plan with features organized into sprints, estimated timelines, and resource allocation.",
+            dependencies=["evaluate_feasibility"]
+        )
+    
+    # Create stakeholder update task with priority consideration
+    if priority_focus:
+        generate_update_task = Task(
+            description=f"Generate a clear and compelling update for stakeholders based on the feedback analysis, feature proposals, technical evaluation, and sprint plan. IMPORTANT: The user has requested to {priority_focus}, so highlight how the planned work addresses this priority.",
+            agent=stakeholder_communicator,
+            expected_output="A stakeholder update that clearly communicates the planned work, its value, and expected impact, with emphasis on how it addresses the user's priority focus.",
+            dependencies=["create_sprint_plan"]
+        )
+    else:
+        generate_update_task = Task(
+            description="Generate a clear and compelling update for stakeholders based on the feedback analysis, feature proposals, technical evaluation, and sprint plan.",
+            agent=stakeholder_communicator,
+            expected_output="A stakeholder update that clearly communicates the planned work, its value, and expected impact.",
+            dependencies=["create_sprint_plan"]
+        )
     
     # Create crew with progress callback
     crew = Crew(mode=st.session_state.mode, progress_callback=update_progress)
@@ -355,7 +415,9 @@ def run_workflow():
         st.session_state.task_status = {}
         
         # Create crew with agents and tasks
-        crew = create_agents_and_tasks(st.session_state.feedback_data)
+        # Use enhanced feedback analysis if available, otherwise use original feedback data
+        feedback_input = st.session_state.enhanced_feedback_analysis if st.session_state.user_collaboration_completed else st.session_state.feedback_data
+        crew = create_agents_and_tasks(feedback_input)
         
         # Run the crew
         start_time = time.time()
@@ -577,6 +639,123 @@ else:
                 st.markdown('<div class="result-container">', unsafe_allow_html=True)
                 st.markdown(feedback_analysis)
                 st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Add user collaboration section
+                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-title">👥 Collaborate with AI</div>', unsafe_allow_html=True)
+                
+                # Check if collaboration is already completed
+                if not st.session_state.user_collaboration_completed:
+                    st.info("You can collaborate with the AI by adding your own insights or notes to the feedback analysis. This enhanced analysis will be used for generating feature proposals.")
+                    
+                    # Categories identified by the AI
+                    st.subheader("Key Categories Identified")
+                    categories_col1, categories_col2 = st.columns(2)
+                    
+                    # Extract categories from the feedback analysis (simplified example)
+                    categories = []
+                    category_pattern = r'(?:Category|Theme|Topic|Area|Issue)\s*(?:\d+)?\s*[:\-]\s*([^\n]+)'
+                    category_matches = re.findall(category_pattern, feedback_analysis, re.IGNORECASE)
+                    categories = [cat.strip() for cat in category_matches[:6]]
+                    
+                    # If no categories found, provide sample ones
+                    if not categories:
+                        categories = ["UI/UX Issues", "Performance Problems", "Feature Requests", "Usability Concerns", "Documentation Needs"]
+                    
+                    # Display categories with checkboxes
+                    selected_categories = []
+                    with categories_col1:
+                        for i, category in enumerate(categories[:3]):
+                            if st.checkbox(f"{category}", value=True, key=f"cat_{i}"):
+                                selected_categories.append(category)
+                    
+                    with categories_col2:
+                        for i, category in enumerate(categories[3:]):
+                            if st.checkbox(f"{category}", value=True, key=f"cat_{i+3}"):
+                                selected_categories.append(category)
+                    
+                    # User notes section
+                    st.subheader("Your Notes and Insights")
+                    user_notes = st.text_area(
+                        "Add your notes, insights or additional context",
+                        value=st.session_state.user_feedback_notes,
+                        height=150,
+                        placeholder="Example: Based on my experience, the performance issues are more critical than indicated. We should prioritize fixing the file upload crashes."
+                    )
+                    
+                    # Priority adjustment
+                    st.subheader("Adjust Priorities")
+                    priority_options = ["Keep AI's priorities", "Prioritize Performance", "Prioritize User Experience", "Prioritize New Features"]
+                    priority_choice = st.radio("Priority Focus:", priority_options)
+                    
+                    # Collaboration action buttons
+                    col1, col2, col3 = st.columns([1, 1, 1])
+                    with col1:
+                        if st.button("Submit Collaboration"):
+                            # Save user input to session state
+                            st.session_state.user_feedback_notes = user_notes
+                            
+                            # Create enhanced feedback analysis
+                            priority_text = ""
+                            if priority_choice != priority_options[0]:
+                                priority_text = f"\n\nPRIORITY ADJUSTMENT: {priority_choice}"
+                            
+                            # Combine AI analysis with user input
+                            st.session_state.enhanced_feedback_analysis = f"""
+{feedback_analysis}
+
+USER COLLABORATION NOTES:
+{user_notes}
+{priority_text}
+
+SELECTED CATEGORIES:
+{', '.join(selected_categories)}
+"""
+                            st.session_state.user_collaboration_completed = True
+                            st.experimental_rerun()
+                    
+                    with col3:
+                        if st.button("Skip Collaboration"):
+                            # Use original feedback analysis
+                            st.session_state.enhanced_feedback_analysis = feedback_analysis
+                            st.session_state.user_collaboration_completed = True
+                            st.experimental_rerun()
+                
+                else:
+                    # Extract priority focus if present
+                    priority_focus = None
+                    if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
+                        priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", st.session_state.enhanced_feedback_analysis)
+                        if priority_match:
+                            priority_focus = priority_match.group(1).strip()
+                    
+                    # Show the enhanced feedback analysis with priority indicator
+                    if priority_focus:
+                        st.success(f"Collaboration completed! Your priority to {priority_focus} will be reflected in all subsequent steps.")
+                        
+                        # Create a visual indicator for the priority focus
+                        priority_color = "#FF7043" if "Performance" in priority_focus else \
+                                        "#42A5F5" if "User Experience" in priority_focus else \
+                                        "#66BB6A" if "New Features" in priority_focus else "#9575CD"
+                        
+                        priority_html = f'''
+                        <div style="padding: 15px; background-color: {priority_color}; color: white; border-radius: 5px; margin: 10px 0; text-align: center;">
+                            <h3 style="margin: 0;">Priority Focus: {priority_focus}</h3>
+                            <p style="margin: 5px 0 0 0;">This priority will influence feature proposals, technical evaluation, sprint planning, and stakeholder updates.</p>
+                        </div>
+                        '''
+                        components.html(priority_html, height=100)
+                    else:
+                        st.success("Collaboration completed! The enhanced analysis will be used for generating feature proposals.")
+                    
+                    # Option to view the enhanced analysis
+                    with st.expander("View Enhanced Analysis", expanded=False):
+                        st.markdown(st.session_state.enhanced_feedback_analysis)
+                    
+                    # Option to restart collaboration
+                    if st.button("Restart Collaboration"):
+                        st.session_state.user_collaboration_completed = False
+                        st.experimental_rerun()
             else:
                 st.markdown('<div class="result-container">No feedback analysis available</div>', unsafe_allow_html=True)
         
