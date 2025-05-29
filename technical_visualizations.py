@@ -17,11 +17,11 @@ def render_technical_evaluation_visualization(tech_eval_text):
     
     # Create a radar chart for technical feasibility
     radar_html = create_feasibility_radar_chart(feasibility_data)
-    components.html(radar_html, height=500)
+    components.html(radar_html, height=1000)
     
     # Create implementation difficulty bars
     difficulty_html = create_difficulty_bars(feasibility_data)
-    components.html(difficulty_html, height=350)
+    components.html(difficulty_html, height=500)
     
 
 def get_sample_feasibility_data():

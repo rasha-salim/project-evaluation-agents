@@ -43,7 +43,7 @@ def render_feature_details_table(features):
     '''
     
     # Use components.html for the table
-    components.html(html_table, height=len(features) * 50 + 100)
+    components.html(html_table, height=len(features) * 50 + 300)
 
 def render_feature_details(feature):
     """
