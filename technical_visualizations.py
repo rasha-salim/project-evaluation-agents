@@ -1,5 +1,9 @@
 import streamlit.components.v1 as components
 import re
+import math
+import streamlit as st
+import plotly.graph_objects as go
+import pandas as pd
 
 def render_technical_evaluation_visualization(tech_eval_text):
     """
@@ -11,47 +15,25 @@ def render_technical_evaluation_visualization(tech_eval_text):
     # Try to extract feasibility ratings
     feasibility_data = extract_feasibility_data(tech_eval_text)
     
-    # If no data was extracted, use sample data for demonstration
-    if not feasibility_data:
-        feasibility_data = get_sample_feasibility_data()
+    # Only create visualizations if we have real data
+    if feasibility_data:
+        # Create a radar chart for technical feasibility
+        radar_html = create_feasibility_radar_chart(feasibility_data)
+        components.html(radar_html, height=1000)
+        
+        # Create implementation difficulty bars
+        difficulty_html = create_difficulty_bars(feasibility_data)
+        components.html(difficulty_html, height=500)
+    else:
+        # Display a message when no data could be extracted
+        components.html(
+            '<div style="padding: 20px; background-color: #f5f5f5; border-radius: 8px; text-align: center;">' +
+            '<h3 style="color: #666;">No technical evaluation data could be extracted</h3>' +
+            '<p>The visualization will appear when technical evaluation data is available.</p>' +
+            '</div>',
+            height=200
+        )
     
-    # Create a radar chart for technical feasibility
-    radar_html = create_feasibility_radar_chart(feasibility_data)
-    components.html(radar_html, height=1000)
-    
-    # Create implementation difficulty bars
-    difficulty_html = create_difficulty_bars(feasibility_data)
-    components.html(difficulty_html, height=500)
-    
-
-def get_sample_feasibility_data():
-    """Provide sample feasibility data when extraction fails"""
-    return [
-        {
-            'name': 'Dark Mode Implementation',
-            'technical_complexity': 2,  # Low-Medium
-            'feasibility': 5,  # High
-            'risk': 1,  # Low
-            'effort': 2,  # Low-Medium
-            'dependencies': ['UI Framework', 'User Preferences System']
-        },
-        {
-            'name': 'Search Improvements',
-            'technical_complexity': 3,  # Medium
-            'feasibility': 4,  # Medium-High
-            'risk': 2,  # Low-Medium
-            'effort': 3,  # Medium
-            'dependencies': ['Search API', 'Frontend Components']
-        },
-        {
-            'name': 'File Upload System',
-            'technical_complexity': 4,  # Medium-High
-            'feasibility': 3,  # Medium
-            'risk': 4,  # Medium-High
-            'effort': 5,  # High
-            'dependencies': ['Storage System', 'Security Framework', 'UI Components']
-        }
-    ]
 
 def extract_feasibility_data(text):
     """Extract feasibility data from technical evaluation text"""
@@ -302,5 +284,209 @@ def create_difficulty_bars(features):
     
     return html
 
-# Add the math import needed for the radar chart
-import math
+def render_technical_evaluation(tech_eval_data):
+    """
+    Render technical evaluation visualizations
+    
+    Args:
+        tech_eval_data (dict): Technical evaluation data from LLM extraction
+    """
+    if not tech_eval_data or not tech_eval_data.get('features'):
+        st.warning("No technical evaluation data available to visualize.")
+        return
+    
+    features = tech_eval_data.get('features', [])
+    
+    # Check if we have user priority focus information
+    has_priority_focus = any('aligns_with_priority' in feature for feature in features)
+    user_priority_focus = None
+    
+    # Get the user priority focus if available
+    if has_priority_focus and features and 'user_priority_focus' in features[0]:
+        user_priority_focus = features[0]['user_priority_focus']
+        
+        # Display a priority focus banner
+        st.markdown(f"<div class='priority-focus-banner'>Priority Focus: {user_priority_focus}</div>", unsafe_allow_html=True)
+    
+    # Create columns for the visualizations
+    col1, col2 = st.columns([3, 2])
+    
+    with col1:
+        # Create a feature complexity chart
+        render_complexity_chart(features, has_priority_focus)
+    
+    with col2:
+        # Create an effort estimation chart
+        render_effort_chart(features, has_priority_focus)
+    
+    # Create a technical challenges table
+    render_challenges_table(features, has_priority_focus)
+
+def render_complexity_chart(features, has_priority_focus=False):
+    """
+    Render a bar chart showing feature complexity
+    
+    Args:
+        features (list): List of feature dictionaries
+        has_priority_focus (bool): Whether to highlight priority-aligned features
+    """
+    st.subheader("Feature Complexity")
+    
+    # Prepare data for the chart
+    feature_names = []
+    complexity_values = []
+    colors = []
+    
+    for feature in features:
+        feature_names.append(feature['name'])
+        complexity_values.append(feature.get('complexity', 3))
+        
+        # Set color based on priority alignment
+        if has_priority_focus and feature.get('aligns_with_priority', False):
+            colors.append('#ff9800')  # Orange for priority-aligned features
+        else:
+            colors.append('#4CAF50')  # Green for regular features
+    
+    # Create the bar chart
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=feature_names,
+        y=complexity_values,
+        marker_color=colors,
+        text=complexity_values,
+        textposition='auto',
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        title="Technical Complexity (1-5)",
+        xaxis_title="Feature",
+        yaxis_title="Complexity Rating",
+        yaxis=dict(range=[0, 5.5]),
+        height=400,
+    )
+    
+    # Add a legend if we have priority focus
+    if has_priority_focus:
+        fig.add_trace(go.Bar(
+            x=[None],
+            y=[None],
+            marker_color='#ff9800',
+            name="Aligns with Priority",
+            showlegend=True
+        ))
+        
+        fig.add_trace(go.Bar(
+            x=[None],
+            y=[None],
+            marker_color='#4CAF50',
+            name="Regular Feature",
+            showlegend=True
+        ))
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_effort_chart(features, has_priority_focus=False):
+    """
+    Render a pie chart showing effort distribution
+    
+    Args:
+        features (list): List of feature dictionaries
+        has_priority_focus (bool): Whether to highlight priority-aligned features
+    """
+    st.subheader("Effort Distribution")
+    
+    # Prepare data for the chart
+    feature_names = []
+    effort_values = []
+    colors = []
+    
+    for feature in features:
+        feature_names.append(feature['name'])
+        effort_values.append(feature.get('effort', 5))
+        
+        # Set color based on priority alignment
+        if has_priority_focus and feature.get('aligns_with_priority', False):
+            colors.append('#ff9800')  # Orange for priority-aligned features
+        else:
+            colors.append('#4CAF50')  # Green for regular features
+    
+    # Create the pie chart
+    fig = go.Figure()
+    
+    fig.add_trace(go.Pie(
+        labels=feature_names,
+        values=effort_values,
+        marker=dict(colors=colors),
+        textinfo='label+percent',
+        hole=0.3,
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        title="Estimated Effort (person-days)",
+        height=400,
+    )
+    
+    # Add a legend if we have priority focus
+    if has_priority_focus:
+        fig.update_layout(
+            legend_title="Feature Type",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.2,
+                xanchor="center",
+                x=0.5
+            )
+        )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_challenges_table(features, has_priority_focus=False):
+    """
+    Render a table showing technical challenges for each feature
+    
+    Args:
+        features (list): List of feature dictionaries
+        has_priority_focus (bool): Whether to highlight priority-aligned features
+    """
+    st.subheader("Technical Challenges")
+    
+    # Create a DataFrame for the table
+    data = []
+    
+    for feature in features:
+        # Get the challenges list or default to empty list
+        challenges = feature.get('challenges', [])
+        challenges_text = ', '.join(challenges) if challenges else 'None identified'
+        
+        # Add priority indicator if needed
+        priority_indicator = '⭐ ' if has_priority_focus and feature.get('aligns_with_priority', False) else ''
+        
+        data.append({
+            'Feature': f"{priority_indicator}{feature['name']}",
+            'Difficulty': feature.get('difficulty', 'Medium'),
+            'Challenges': challenges_text
+        })
+    
+    # Create and display the DataFrame
+    if data:
+        df = pd.DataFrame(data)
+        
+        # Apply styling to highlight priority-aligned features
+        def highlight_priority(row):
+            if '⭐' in row['Feature']:
+                return ['background-color: #fff8e1'] * len(row)
+            return [''] * len(row)
+        
+        # Apply the styling if we have priority focus
+        if has_priority_focus:
+            styled_df = df.style.apply(highlight_priority, axis=1)
+            st.dataframe(styled_df, use_container_width=True)
+        else:
+            st.dataframe(df, use_container_width=True)
+    else:
+        st.info("No technical challenges data available.")
+

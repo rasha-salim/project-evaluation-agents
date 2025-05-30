@@ -1,5 +1,8 @@
 import streamlit.components.v1 as components
 import re
+import streamlit as st
+import plotly.graph_objects as go
+import pandas as pd
 
 def render_stakeholder_update_visualization(update_text):
     """
@@ -11,45 +14,27 @@ def render_stakeholder_update_visualization(update_text):
     # Extract key metrics and progress data
     metrics = extract_metrics(update_text)
     
-    # If no data was extracted, use sample data for demonstration
-    if not metrics or metrics['total_features'] == 0:
-        metrics = get_sample_metrics()
-    
-    # Create a progress overview visualization
-    progress_html = create_progress_overview(metrics)
-    components.html(progress_html, height=400)
-    
-    # Create a key achievements visualization
-    achievements_html = create_achievements_visualization(update_text, metrics)
-    components.html(achievements_html, height=500)
+    # Only create visualizations if we have real data
+    if metrics and metrics['total_features'] > 0:
+        # Create a progress overview visualization
+        progress_html = create_progress_overview(metrics)
+        components.html(progress_html, height=400)
+        
+        # Create a key achievements visualization
+        achievements_html = create_achievements_visualization(update_text, metrics)
+        components.html(achievements_html, height=500)
+    else:
+        # Display a message when no data could be extracted
+        components.html(
+            '<div style="padding: 20px; background-color: #f5f5f5; border-radius: 8px; text-align: center;">' +
+            '<h3 style="color: #666;">No stakeholder update data could be extracted</h3>' +
+            '<p>The visualization will appear when stakeholder update data is available.</p>' +
+            '</div>',
+            height=200
+        )
     
 
-def get_sample_metrics():
-    """Provide sample metrics when extraction fails"""
-    return {
-        'completed_features': 4,
-        'in_progress_features': 3,
-        'planned_features': 3,
-        'total_features': 10,
-        'completion_percentage': 40,
-        'key_achievements': [
-            'Completed Dark Mode implementation',
-            'Improved search functionality with partial matching',
-            'Fixed critical performance issues on large files',
-            'Added user preference storage'
-        ],
-        'challenges': [
-            'File upload system complexity is higher than anticipated',
-            'Battery optimization requires additional testing',
-            'Integration with legacy systems taking longer than expected'
-        ],
-        'next_steps': [
-            'Complete file upload system implementation',
-            'Begin work on analytics dashboard',
-            'Implement notification system improvements',
-            'Start planning for custom themes feature'
-        ]
-    }
+# Sample metrics function removed - we now only use real data
 
 def extract_metrics(text):
     """Extract metrics data from stakeholder update text"""
@@ -64,230 +49,471 @@ def extract_metrics(text):
         'next_steps': []
     }
     
-    # Try to find completion percentage
-    completion_pattern = r'(?:completion|progress|completed).*?(\d+)%'
-    completion_match = re.search(completion_pattern, text, re.IGNORECASE)
-    if completion_match:
-        metrics['completion_percentage'] = int(completion_match.group(1))
-    
-    # Try to find feature counts
-    completed_pattern = r'(\d+)(?:\s+|\s*,\s*)(?:features?|tasks?|items?|stories?|work\s+items?)(?:\s+|\s*,\s*)(?:have\s+been\s+|were\s+|are\s+)?completed'
-    completed_match = re.search(completed_pattern, text, re.IGNORECASE)
+    # Extract completion metrics
+    completed_match = re.search(r'(\d+)\s*(?:features|tasks)?\s*completed', text, re.IGNORECASE)
     if completed_match:
         metrics['completed_features'] = int(completed_match.group(1))
     
-    in_progress_pattern = r'(\d+)(?:\s+|\s*,\s*)(?:features?|tasks?|items?|stories?|work\s+items?)(?:\s+|\s*,\s*)(?:are\s+|currently\s+|in\s+|being\s+)?(?:in\s+progress|ongoing|underway)'
-    in_progress_match = re.search(in_progress_pattern, text, re.IGNORECASE)
+    in_progress_match = re.search(r'(\d+)\s*(?:features|tasks)?\s*in\s*progress', text, re.IGNORECASE)
     if in_progress_match:
         metrics['in_progress_features'] = int(in_progress_match.group(1))
     
-    planned_pattern = r'(\d+)(?:\s+|\s*,\s*)(?:features?|tasks?|items?|stories?|work\s+items?)(?:\s+|\s*,\s*)(?:are\s+|have\s+been\s+)?planned'
-    planned_match = re.search(planned_pattern, text, re.IGNORECASE)
+    planned_match = re.search(r'(\d+)\s*(?:features|tasks)?\s*planned', text, re.IGNORECASE)
     if planned_match:
         metrics['planned_features'] = int(planned_match.group(1))
     
-    total_pattern = r'(?:total\s+of\s+)?(\d+)(?:\s+|\s*,\s*)(?:features?|tasks?|items?|stories?|work\s+items?)(?:\s+|\s*,\s*)?(?:in\s+total|total|overall)'
-    total_match = re.search(total_pattern, text, re.IGNORECASE)
-    if total_match:
-        metrics['total_features'] = int(total_match.group(1))
-    else:
-        # Calculate total from other metrics
-        metrics['total_features'] = metrics['completed_features'] + metrics['in_progress_features'] + metrics['planned_features']
+    # Calculate total features
+    metrics['total_features'] = metrics['completed_features'] + metrics['in_progress_features'] + metrics['planned_features']
     
-    # If we still don't have a completion percentage, calculate it
-    if metrics['completion_percentage'] == 0 and metrics['total_features'] > 0:
+    # Calculate completion percentage
+    if metrics['total_features'] > 0:
         metrics['completion_percentage'] = int((metrics['completed_features'] / metrics['total_features']) * 100)
     
     # Extract key achievements
-    achievements_section = re.search(r'(?:Key\s+Achievements|Accomplishments|Progress|Highlights)(?:[\s:\-]+)([^#]+?)(?:(?:Key\s+)?(?:Challenges|Issues|Blockers|Risks)|(?:Next\s+Steps)|$)', 
-                                    text, re.IGNORECASE | re.DOTALL)
+    achievements_section = re.search(r'(?:achievements|accomplishments|highlights)[:\n]+((?:(?:\*|\-|\d+\.)[^\n]+\n?)+)', 
+                                   text, re.IGNORECASE)
     if achievements_section:
-        achievement_text = achievements_section.group(1).strip()
-        # Look for bullet points or numbered items
-        achievements = re.findall(r'(?:^|\n)(?:\d+\.|\*|\-|\•)\s*([^\n]+)', achievement_text)
-        if achievements:
-            metrics['key_achievements'] = [a.strip() for a in achievements]
-        else:
-            # Split by sentences if no bullet points found
-            sentences = re.split(r'(?<=[.!?])\s+', achievement_text)
-            metrics['key_achievements'] = [s.strip() for s in sentences if len(s.strip()) > 20]
+        metrics['key_achievements'] = [a.strip() for a in re.findall(r'(?:\*|\-|\d+\.)\s*([^\n]+)', achievements_section.group(1))]
     
     # Extract challenges
-    challenges_section = re.search(r'(?:Key\s+)?(?:Challenges|Issues|Blockers|Risks)(?:[\s:\-]+)([^#]+?)(?:(?:Next\s+Steps)|$)', 
-                                 text, re.IGNORECASE | re.DOTALL)
+    challenges_section = re.search(r'(?:challenges|risks|issues)[:\n]+((?:(?:\*|\-|\d+\.)[^\n]+\n?)+)', 
+                                 text, re.IGNORECASE)
     if challenges_section:
-        challenge_text = challenges_section.group(1).strip()
-        # Look for bullet points or numbered items
-        challenges = re.findall(r'(?:^|\n)(?:\d+\.|\*|\-|\•)\s*([^\n]+)', challenge_text)
-        if challenges:
-            metrics['challenges'] = [c.strip() for c in challenges]
-        else:
-            # Split by sentences if no bullet points found
-            sentences = re.split(r'(?<=[.!?])\s+', challenge_text)
-            metrics['challenges'] = [s.strip() for s in sentences if len(s.strip()) > 20]
+        metrics['challenges'] = [c.strip() for c in re.findall(r'(?:\*|\-|\d+\.)\s*([^\n]+)', challenges_section.group(1))]
     
     # Extract next steps
-    next_steps_section = re.search(r'(?:Next\s+Steps|Future\s+Work|Upcoming|Roadmap)(?:[\s:\-]+)([^#]+?)(?:$)', 
-                                 text, re.IGNORECASE | re.DOTALL)
+    next_steps_section = re.search(r'(?:next steps|future work|recommendations)[:\n]+((?:(?:\*|\-|\d+\.)[^\n]+\n?)+)', 
+                                 text, re.IGNORECASE)
     if next_steps_section:
-        next_steps_text = next_steps_section.group(1).strip()
-        # Look for bullet points or numbered items
-        next_steps = re.findall(r'(?:^|\n)(?:\d+\.|\*|\-|\•)\s*([^\n]+)', next_steps_text)
-        if next_steps:
-            metrics['next_steps'] = [n.strip() for n in next_steps]
-        else:
-            # Split by sentences if no bullet points found
-            sentences = re.split(r'(?<=[.!?])\s+', next_steps_text)
-            metrics['next_steps'] = [s.strip() for s in sentences if len(s.strip()) > 20]
+        metrics['next_steps'] = [s.strip() for s in re.findall(r'(?:\*|\-|\d+\.)\s*([^\n]+)', next_steps_section.group(1))]
     
     return metrics
 
 def create_progress_overview(metrics):
     """Create a progress overview visualization"""
-    # Calculate percentages for the chart
-    completed_percent = metrics['completed_features'] / max(metrics['total_features'], 1) * 100
-    in_progress_percent = metrics['in_progress_features'] / max(metrics['total_features'], 1) * 100
-    planned_percent = metrics['planned_features'] / max(metrics['total_features'], 1) * 100
+    # Calculate the values for the progress bars
+    completed = metrics['completed_features']
+    in_progress = metrics['in_progress_features']
+    planned = metrics['planned_features']
+    total = metrics['total_features']
+    completion_percentage = metrics['completion_percentage']
     
-    # Create the HTML for the progress overview
-    html = '''
-    <div style="margin-top: 20px; margin-bottom: 30px;">
-        <h3 style="margin-top: 0; color: #333; border-bottom: 2px solid #673AB7; padding-bottom: 8px;">Project Progress Overview</h3>
-        
-        <!-- Progress Circle -->
-        <div style="display: flex; flex-wrap: wrap; align-items: center; margin-top: 20px;">
-            <div style="flex: 0 0 200px; position: relative; margin: 0 auto;">
-                <svg width="200" height="200" viewBox="0 0 200 200">
-                    <!-- Background circle -->
-                    <circle cx="100" cy="100" r="90" fill="none" stroke="#e0e0e0" stroke-width="15"/>
-                    
-                    <!-- Progress circle -->
-                    <circle cx="100" cy="100" r="90" fill="none" stroke="#4CAF50" stroke-width="15"
-                            stroke-dasharray="565.48" stroke-dashoffset="''' + str(565.48 - (565.48 * metrics['completion_percentage'] / 100)) + '''"
-                            transform="rotate(-90 100 100)"/>
-                            
-                    <!-- Percentage text -->
-                    <text x="100" y="100" text-anchor="middle" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#333">
-                        ''' + str(metrics['completion_percentage']) + '''%
-                    </text>
-                    <text x="100" y="130" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="#666">
-                        Complete
-                    </text>
-                </svg>
-            </div>
-            
-            <!-- Feature Status Breakdown -->
-            <div style="flex: 1; min-width: 300px; margin-left: 20px;">
-                <div style="margin-bottom: 20px;">
-                    <h4 style="margin-top: 0; color: #333; margin-bottom: 15px;">Feature Status</h4>
-                    
-                    <!-- Completed Features -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <div style="font-weight: 500;">Completed</div>
-                            <div>''' + str(metrics['completed_features']) + ''' of ''' + str(metrics['total_features']) + '''</div>
-                        </div>
-                        <div style="background-color: #E0E0E0; height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div style="width: ''' + str(completed_percent) + '''%; height: 100%; background-color: #4CAF50;"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- In Progress Features -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <div style="font-weight: 500;">In Progress</div>
-                            <div>''' + str(metrics['in_progress_features']) + ''' of ''' + str(metrics['total_features']) + '''</div>
-                        </div>
-                        <div style="background-color: #E0E0E0; height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div style="width: ''' + str(in_progress_percent) + '''%; height: 100%; background-color: #2196F3;"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Planned Features -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <div style="font-weight: 500;">Planned</div>
-                            <div>''' + str(metrics['planned_features']) + ''' of ''' + str(metrics['total_features']) + '''</div>
-                        </div>
-                        <div style="background-color: #E0E0E0; height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div style="width: ''' + str(planned_percent) + '''%; height: 100%; background-color: #FF9800;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    # Create HTML for the visualization
+    html = '<div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">'
+    html += '<h3 style="color: #333; margin-bottom: 15px;">Project Progress Overview</h3>'
+    
+    # Create a progress meter
+    html += f'''
+    <div style="margin-bottom: 30px; text-align: center;">
+        <div style="font-size: 48px; font-weight: bold; color: #4CAF50;">{completion_percentage}%</div>
+        <div style="font-size: 16px; color: #666;">Project Completion</div>
     </div>
     '''
+    
+    # Create feature status breakdown
+    html += '<div style="display: flex; justify-content: space-around; margin-bottom: 20px;">'
+    
+    # Completed features
+    html += f'''
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 36px; font-weight: bold; color: #4CAF50;">{completed}</div>
+        <div style="font-size: 14px; color: #666;">Completed</div>
+    </div>
+    '''
+    
+    # In-progress features
+    html += f'''
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 36px; font-weight: bold; color: #2196F3;">{in_progress}</div>
+        <div style="font-size: 14px; color: #666;">In Progress</div>
+    </div>
+    '''
+    
+    # Planned features
+    html += f'''
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 36px; font-weight: bold; color: #9E9E9E;">{planned}</div>
+        <div style="font-size: 14px; color: #666;">Planned</div>
+    </div>
+    '''
+    
+    html += '</div>'
+    
+    # Create a progress bar
+    html += '<div style="margin-top: 20px;">'
+    html += '<div style="margin-bottom: 5px; display: flex; justify-content: space-between;">'
+    html += '<span style="font-size: 14px; color: #666;">Overall Progress</span>'
+    html += f'<span style="font-size: 14px; color: #666;">{completion_percentage}%</span>'
+    html += '</div>'
+    
+    # Progress bar container
+    html += '<div style="height: 24px; background-color: #e0e0e0; border-radius: 12px; overflow: hidden;">'
+    
+    # Progress bar fill
+    html += f'<div style="height: 100%; width: {completion_percentage}%; background-color: #4CAF50; border-radius: 12px;"></div>'
+    
+    html += '</div>'
+    html += '</div>'
+    
+    html += '</div>'
     
     return html
 
 def create_achievements_visualization(text, metrics=None):
     """Create a visualization for key achievements, challenges, and next steps"""
-    if metrics is None:
-        metrics = extract_metrics(text)
+    # Extract achievements, challenges, and next steps
+    achievements = []
+    challenges = []
+    next_steps = []
     
-    html = '''
-    <div style="margin-top: 20px; margin-bottom: 30px;">
-        <div style="display: flex; flex-wrap: wrap; gap: 20px;">
-    '''
+    if metrics:
+        achievements = metrics.get('key_achievements', [])
+        challenges = metrics.get('challenges', [])
+        next_steps = metrics.get('next_steps', [])
+    else:
+        # Extract from text if metrics not provided
+        achievements_section = re.search(r'(?:achievements|accomplishments|highlights)[:\n]+((?:(?:\*|\-|\d+\.)[^\n]+\n?)+)', 
+                                       text, re.IGNORECASE)
+        if achievements_section:
+            achievements = [a.strip() for a in re.findall(r'(?:\*|\-|\d+\.)\s*([^\n]+)', achievements_section.group(1))]
+        
+        challenges_section = re.search(r'(?:challenges|risks|issues)[:\n]+((?:(?:\*|\-|\d+\.)[^\n]+\n?)+)', 
+                                     text, re.IGNORECASE)
+        if challenges_section:
+            challenges = [c.strip() for c in re.findall(r'(?:\*|\-|\d+\.)\s*([^\n]+)', challenges_section.group(1))]
+        
+        next_steps_section = re.search(r'(?:next steps|future work|recommendations)[:\n]+((?:(?:\*|\-|\d+\.)[^\n]+\n?)+)', 
+                                     text, re.IGNORECASE)
+        if next_steps_section:
+            next_steps = [s.strip() for s in re.findall(r'(?:\*|\-|\d+\.)\s*([^\n]+)', next_steps_section.group(1))]
+    
+    # Create HTML for the visualization
+    html = '<div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin-top: 20px;">'    
+    html += '<h3 style="color: #333; margin-bottom: 15px;">Project Status Overview</h3>'
+    
+    # Create a grid layout
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">'
     
     # Key Achievements section
-    if metrics['key_achievements']:
-        html += '''
-        <div style="flex: 1; min-width: 300px; background-color: #E8F5E9; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-            <h3 style="margin-top: 0; color: #2E7D32; border-bottom: 2px solid #2E7D32; padding-bottom: 8px;">Key Achievements</h3>
-            <ul style="margin-top: 10px; padding-left: 20px;">
-        '''
-        
-        for achievement in metrics['key_achievements'][:5]:  # Limit to 5 achievements
-            html += f'''
-            <li style="margin-bottom: 10px;">{achievement}</li>
-            '''
-            
-        html += '''
-            </ul>
-        </div>
-        '''
+    html += '<div style="background-color: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">'    
+    html += '<h4 style="margin-top: 0; color: #4CAF50;">Key Achievements</h4>'
+    html += '<ul style="margin-top: 10px; padding-left: 20px;">'
+    for achievement in achievements[:5]:  # Show top 5
+        html += f'<li>{achievement}</li>'
+    if not achievements:
+        html += '<li><em>No achievements reported</em></li>'
+    html += '</ul>'
+    html += '</div>'
     
     # Challenges section
-    if metrics['challenges']:
-        html += '''
-        <div style="flex: 1; min-width: 300px; background-color: #FFF3E0; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-            <h3 style="margin-top: 0; color: #E65100; border-bottom: 2px solid #E65100; padding-bottom: 8px;">Challenges</h3>
-            <ul style="margin-top: 10px; padding-left: 20px;">
-        '''
-        
-        for challenge in metrics['challenges'][:5]:  # Limit to 5 challenges
-            html += f'''
-            <li style="margin-bottom: 10px;">{challenge}</li>
-            '''
-            
-        html += '''
-            </ul>
-        </div>
-        '''
+    html += '<div style="background-color: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">'    
+    html += '<h4 style="margin-top: 0; color: #F44336;">Challenges & Risks</h4>'
+    html += '<ul style="margin-top: 10px; padding-left: 20px;">'
+    for challenge in challenges[:5]:  # Show top 5
+        html += f'<li>{challenge}</li>'
+    if not challenges:
+        html += '<li><em>No challenges reported</em></li>'
+    html += '</ul>'
+    html += '</div>'
     
     # Next Steps section
-    if metrics['next_steps']:
-        html += '''
-        <div style="flex: 1; min-width: 300px; background-color: #E3F2FD; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-            <h3 style="margin-top: 0; color: #1565C0; border-bottom: 2px solid #1565C0; padding-bottom: 8px;">Next Steps</h3>
-            <ul style="margin-top: 10px; padding-left: 20px;">
-        '''
-        
-        for step in metrics['next_steps'][:5]:  # Limit to 5 next steps
-            html += f'''
-            <li style="margin-bottom: 10px;">{step}</li>
-            '''
-            
-        html += '''
-            </ul>
-        </div>
-        '''
+    html += '<div style="background-color: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">'    
+    html += '<h4 style="margin-top: 0; color: #2196F3;">Next Steps</h4>'
+    html += '<ul style="margin-top: 10px; padding-left: 20px;">'
+    for step in next_steps[:5]:  # Show top 5
+        html += f'<li>{step}</li>'
+    if not next_steps:
+        html += '<li><em>No next steps reported</em></li>'
+    html += '</ul>'
+    html += '</div>'
     
-    html += '''
-        </div>
-    </div>
-    '''
+    html += '</div>'
+    html += '</div>'
     
     return html
+
+
+def render_stakeholder_update(update_data):
+    """
+    Render stakeholder update visualizations
+    
+    Args:
+        update_data (dict): Stakeholder update data from LLM extraction
+    """
+    if not update_data:
+        st.warning("No stakeholder update data available to visualize.")
+        return
+    
+    # Check if we have user priority focus information
+    has_priority_focus = False
+    user_priority_focus = None
+    
+    # Check for priority focus in the data
+    if 'user_priority_focus' in update_data:
+        user_priority_focus = update_data['user_priority_focus']
+        has_priority_focus = True
+        
+        # Display a priority focus banner
+        st.markdown(f"<div class='priority-focus-banner'>Priority Focus: {user_priority_focus}</div>", unsafe_allow_html=True)
+        
+        # Display priority focus summary if available
+        if 'priority_focus_summary' in update_data and update_data['priority_focus_summary']:
+            st.markdown("### Priority Focus Summary")
+            st.markdown(f"<div class='priority-summary'>{update_data['priority_focus_summary']}</div>", unsafe_allow_html=True)
+    
+    # Create columns for the visualizations
+    col1, col2 = st.columns([3, 2])
+    
+    with col1:
+        # Render highlights
+        render_highlights(update_data, has_priority_focus)
+    
+    with col2:
+        # Render risks
+        render_risks(update_data, has_priority_focus)
+    
+    # Render action items
+    render_action_items(update_data, has_priority_focus)
+
+
+def render_highlights(update_data, has_priority_focus=False):
+    """
+    Render project highlights and metrics
+    
+    Args:
+        update_data (dict): Stakeholder update data
+        has_priority_focus (bool): Whether to highlight priority-aligned items
+    """
+    st.subheader("Project Highlights")
+    
+    highlights = update_data.get('highlights', [])
+    priority_highlights = update_data.get('priority_highlights', []) if has_priority_focus else []
+    
+    if not highlights:
+        st.info("No project highlights available.")
+        return
+    
+    # Create a DataFrame for the highlights
+    data = []
+    
+    for highlight in highlights:
+        # Check if this is a priority highlight
+        is_priority = highlight in priority_highlights
+        priority_indicator = '⭐ ' if is_priority else ''
+        
+        data.append({
+            'Highlight': f"{priority_indicator}{highlight}"
+        })
+    
+    # Create and display the DataFrame
+    df = pd.DataFrame(data)
+    
+    # Apply styling to highlight priority items
+    def highlight_priority(row):
+        if '⭐' in row['Highlight']:
+            return ['background-color: #fff8e1']
+        return ['']
+    
+    # Apply the styling if we have priority focus
+    if has_priority_focus and priority_highlights:
+        styled_df = df.style.apply(highlight_priority, axis=1)
+        st.dataframe(styled_df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+    else:
+        st.dataframe(df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+    
+    # Render metrics if available
+    metrics = update_data.get('metrics', [])
+    priority_metrics = update_data.get('priority_metrics', []) if has_priority_focus else []
+    
+    if metrics:
+        st.subheader("Key Metrics")
+        
+        # Create metrics columns
+        metric_cols = st.columns(min(3, len(metrics)))
+        
+        for i, metric in enumerate(metrics):
+            # Check if this is a priority metric
+            is_priority = metric in priority_metrics
+            priority_indicator = '⭐ ' if is_priority else ''
+            
+            # Extract metric name and value
+            if ':' in metric:
+                name, value = metric.split(':', 1)
+            else:
+                name, value = metric, 'N/A'
+            
+            # Display the metric in the appropriate column
+            with metric_cols[i % len(metric_cols)]:
+                st.metric(
+                    label=f"{priority_indicator}{name.strip()}",
+                    value=value.strip(),
+                    delta=None
+                )
+
+
+def render_risks(update_data, has_priority_focus=False):
+    """
+    Render project risks and challenges
+    
+    Args:
+        update_data (dict): Stakeholder update data
+        has_priority_focus (bool): Whether to highlight priority-aligned items
+    """
+    st.subheader("Risks & Challenges")
+    
+    risks = update_data.get('risks', [])
+    priority_risks = update_data.get('priority_risks', []) if has_priority_focus else []
+    
+    if not risks:
+        st.info("No risks or challenges identified.")
+        return
+    
+    # Create a DataFrame for the risks
+    data = []
+    
+    for risk in risks:
+        # Extract risk text and impact level
+        risk_text = risk
+        impact = 'Medium'  # Default
+        
+        if isinstance(risk, dict):
+            risk_text = risk.get('text', '')
+            impact = risk.get('impact', 'Medium')
+        elif ':' in risk:
+            risk_parts = risk.split(':', 1)
+            risk_text = risk_parts[0].strip()
+            impact_text = risk_parts[1].strip().lower()
+            
+            if 'high' in impact_text:
+                impact = 'High'
+            elif 'low' in impact_text:
+                impact = 'Low'
+        
+        # Check if this is a priority risk
+        is_priority = risk in priority_risks or risk_text in priority_risks
+        priority_indicator = '⭐ ' if is_priority else ''
+        
+        # Set color based on impact level
+        if impact.lower() == 'high':
+            impact_color = 'red'
+        elif impact.lower() == 'medium':
+            impact_color = 'orange'
+        else:
+            impact_color = 'green'
+        
+        data.append({
+            'Risk': f"{priority_indicator}{risk_text}",
+            'Impact': impact,
+            'Impact_Color': impact_color
+        })
+    
+    # Create and display the DataFrame
+    if data:
+        df = pd.DataFrame(data)
+        
+        # Apply styling to color-code impact levels and highlight priority items
+        def style_risk_table(row):
+            color = row['Impact_Color']
+            styles = ['', f'color: {color}; font-weight: bold']
+            
+            # Add background color for priority items
+            if '⭐' in row['Risk'] and has_priority_focus:
+                styles = ['background-color: #fff8e1', f'background-color: #fff8e1; color: {color}; font-weight: bold']
+                
+            return styles
+        
+        # Apply the styling
+        styled_df = df[['Risk', 'Impact']].style.apply(style_risk_table, axis=1)
+        st.dataframe(styled_df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+    else:
+        st.info("No risk data available.")
+
+
+def render_action_items(update_data, has_priority_focus=False):
+    """
+    Render next steps and resource needs
+    
+    Args:
+        update_data (dict): Stakeholder update data
+        has_priority_focus (bool): Whether to highlight priority-aligned items
+    """
+    # Get next steps and resources
+    next_steps = update_data.get('next_steps', [])
+    resources = update_data.get('resources', [])
+    
+    priority_next_steps = update_data.get('priority_next_steps', []) if has_priority_focus else []
+    priority_resources = update_data.get('priority_resources', []) if has_priority_focus else []
+    
+    # Create columns for next steps and resources
+    if next_steps or resources:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Next Steps")
+            
+            if next_steps:
+                # Create a DataFrame for next steps
+                data = []
+                
+                for step in next_steps:
+                    # Check if this is a priority step
+                    is_priority = step in priority_next_steps
+                    priority_indicator = '⭐ ' if is_priority else ''
+                    
+                    data.append({
+                        'Action': f"{priority_indicator}{step}"
+                    })
+                
+                # Create and display the DataFrame
+                df = pd.DataFrame(data)
+                
+                # Apply styling to highlight priority items
+                def highlight_priority(row):
+                    if '⭐' in row['Action']:
+                        return ['background-color: #fff8e1']
+                    return ['']
+                
+                # Apply the styling if we have priority focus
+                if has_priority_focus and priority_next_steps:
+                    styled_df = df.style.apply(highlight_priority, axis=1)
+                    st.dataframe(styled_df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+                else:
+                    st.dataframe(df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+            else:
+                st.info("No next steps available.")
+        
+        with col2:
+            st.subheader("Resource Needs")
+            
+            if resources:
+                # Create a DataFrame for resources
+                data = []
+                
+                for resource in resources:
+                    # Check if this is a priority resource
+                    is_priority = resource in priority_resources
+                    priority_indicator = '⭐ ' if is_priority else ''
+                    
+                    data.append({
+                        'Resource': f"{priority_indicator}{resource}"
+                    })
+                
+                # Create and display the DataFrame
+                df = pd.DataFrame(data)
+                
+                # Apply styling to highlight priority items
+                def highlight_priority(row):
+                    if '⭐' in row['Resource']:
+                        return ['background-color: #fff8e1']
+                    return ['']
+                
+                # Apply the styling if we have priority focus
+                if has_priority_focus and priority_resources:
+                    styled_df = df.style.apply(highlight_priority, axis=1)
+                    st.dataframe(styled_df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+                else:
+                    st.dataframe(df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+            else:
+                st.info("No resource needs available.")
+    else:
+        st.info("No action items or resource needs available.")

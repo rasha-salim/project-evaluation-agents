@@ -1,20 +1,41 @@
 import streamlit.components.v1 as components
 import re
 
-def render_feedback_analysis_visualization(feedback_analysis_text):
+def render_feedback_analysis_visualization(feedback_analysis_text, raw_feedback=None):
     """
     Create visualizations for the feedback analysis tab
     
     Args:
         feedback_analysis_text: The feedback analysis text from the AI
+        raw_feedback: Optional raw feedback data to analyze if extraction fails
     """
-    # For now, always use sample data to ensure visualizations are displayed
-    # This will be replaced with actual data extraction once the patterns are refined
-    categories = get_sample_categories()
-    sentiment = get_sample_sentiment()
+    # Import the sample feedback if raw_feedback is not provided
+    if not raw_feedback:
+        try:
+            # Try to import the sample feedback from direct_app.py
+            from direct_app import SAMPLE_FEEDBACK
+            raw_feedback = SAMPLE_FEEDBACK
+        except ImportError:
+            # If import fails, use None (will fall back to sample data)
+            pass
     
-    # Attempt to extract real data (for future use)
-    # extracted_categories, extracted_sentiment = extract_feedback_data(feedback_analysis_text)
+    # First try to use the LLM to analyze the raw feedback directly
+    categories = None
+    sentiment = None
+    
+    if raw_feedback:
+        try:
+            # Use the LLM to analyze the raw feedback directly
+            llm_categories, llm_sentiment = analyze_feedback_with_llm(raw_feedback)
+            if llm_categories and sum(llm_sentiment.values()) == 100:
+                categories = llm_categories
+                sentiment = llm_sentiment
+        except Exception as e:
+            print(f"Error using LLM for feedback analysis: {str(e)}")
+    
+    # If LLM analysis failed, fall back to regex extraction
+    if not categories or not sentiment:
+        categories, sentiment = extract_feedback_data(feedback_analysis_text, raw_feedback)
     
     # Create a bar chart for categories
     category_html = create_category_bars(categories)
@@ -22,63 +43,210 @@ def render_feedback_analysis_visualization(feedback_analysis_text):
     
     # Create a sentiment analysis visualization with increased height
     sentiment_html = create_sentiment_bars(sentiment)
-    components.html(sentiment_html, height=200)  # Increased from 150 to 200
+    components.html(sentiment_html, height=200)  # Increased height for better visibility
 
-def extract_feedback_data(text):
-    """Extract feedback data from feedback analysis text"""
+def extract_feedback_data(text, raw_feedback=None):
+    """Extract categories and sentiment from feedback analysis text
+    
+    Args:
+        text: Feedback analysis text
+        raw_feedback: Optional raw feedback data to analyze if extraction fails
+        
+    Returns:
+        tuple: (categories, sentiment)
+    """
+    # Initialize with default values
+    categories = []
+    sentiment = {'positive': 0, 'neutral': 0, 'negative': 0}
+    
+    # Get default sentiment values
+    default_sentiment = get_default_sentiment()
+    default_percentages = [default_sentiment['positive'], default_sentiment['neutral'], default_sentiment['negative']]
+    
+    # Try to extract categories
+    category_pattern = r'(?:Category|Theme|Topic|Area|Issue)\s*(?:\d+)?\s*[:\-]\s*([^\n]+)\s*\(?(?:(\d+)\s*(?:mentions|comments|occurrences|%|percent)?)?\)?'
+    category_matches = re.findall(category_pattern, text, re.IGNORECASE)
+    
+    for match in category_matches:
+        category_name = match[0].strip()
+        try:
+            count = int(match[1]) if len(match) > 1 and match[1].isdigit() else 1
+            categories.append({"category": category_name, "count": count})
+        except (IndexError, ValueError):
+            categories.append({"category": category_name, "count": 1})
+    
+    # Try to extract sentiment percentages
+    positive_pattern = r'(?:Positive|Favorable)\s*(?:sentiment|feedback)?\s*[:\-]?\s*(\d+)\s*(?:%|percent)'
+    neutral_pattern = r'(?:Neutral|Balanced)\s*(?:sentiment|feedback)?\s*[:\-]?\s*(\d+)\s*(?:%|percent)'
+    negative_pattern = r'(?:Negative|Critical|Unfavorable)\s*(?:sentiment|feedback)?\s*[:\-]?\s*(\d+)\s*(?:%|percent)'
+    
+    positive_match = re.search(positive_pattern, text, re.IGNORECASE)
+    neutral_match = re.search(neutral_pattern, text, re.IGNORECASE)
+    negative_match = re.search(negative_pattern, text, re.IGNORECASE)
+    
+    if positive_match and neutral_match and negative_match:
+        sentiment['positive'] = int(positive_match.group(1))
+        sentiment['neutral'] = int(neutral_match.group(1))
+        sentiment['negative'] = int(negative_match.group(1))
+    else:
+        sentiment['positive'] = default_percentages[0]
+        sentiment['neutral'] = default_percentages[1]
+        sentiment['negative'] = default_percentages[2]
+    
+    # If extraction failed and we have raw feedback, use LLM to analyze it
+    if (not categories or all(v == 0 for v in sentiment.values())) and raw_feedback:
+        try:
+            # Use the LLM to analyze the raw feedback
+            llm_categories, llm_sentiment = analyze_feedback_with_llm(raw_feedback)
+            
+            # Use LLM results if available
+            if not categories and llm_categories:
+                categories = llm_categories
+            
+            if (all(v == 0 for v in sentiment.values()) or sentiment['positive'] == default_percentages[0]) and sum(llm_sentiment.values()) == 100:
+                sentiment = llm_sentiment
+        except Exception as e:
+            print(f"Error using LLM for feedback analysis: {str(e)}")
+            # If LLM analysis fails, use default categories
+            if not categories:
+                categories = get_default_categories()
+    # If extraction failed and no raw feedback is provided, use default categories
+    elif not categories:
+        categories = get_default_categories()
+    
+    return categories, sentiment
+
+def analyze_feedback_with_llm(feedback_text):
+    """Use the AI agent to analyze feedback data for categories and sentiment
+    
+    Args:
+        feedback_text (str): Raw feedback data
+        
+    Returns:
+        tuple: (categories, sentiment)
+    """
+    from direct_agents.agent import Agent
+    from direct_agents.task import Task
+    
+    # Create a feedback analysis agent
+    feedback_analyst = Agent(
+        role="Feedback Analyst",
+        goal="Analyze user feedback to identify patterns, priorities, and insights",
+        backstory="You are an expert in data analysis with a focus on user feedback. You excel at identifying patterns and extracting actionable insights from user comments.",
+        verbose=False
+    )
+    
+    # Define the standard categories we want to use
+    standard_categories = [
+        "UI/UX Issues", 
+        "Performance Problems", 
+        "Feature Requests", 
+        "Usability Concerns", 
+        "Documentation Needs"
+    ]
+    
+    # Create a task for the agent to analyze the feedback
+    analysis_task = Task(
+        description=f"""Analyze the following user feedback and provide:
+1. Count how many comments fall into each of these categories: {', '.join(standard_categories)}. A comment can belong to multiple categories.
+2. Calculate the sentiment percentage (positive, neutral, negative) across all comments.
+
+Format your response exactly as follows:
+
+CATEGORIES:
+UI/UX Issues: [count]
+Performance Problems: [count]
+Feature Requests: [count]
+Usability Concerns: [count]
+Documentation Needs: [count]
+
+SENTIMENT:
+Positive: [percentage]%
+Neutral: [percentage]%
+Negative: [percentage]%
+
+Here's the feedback to analyze:
+{feedback_text}""",
+        agent=feedback_analyst,
+        expected_output="Categorized feedback counts and sentiment percentages"
+    )
+    
+    # Execute the task
+    result = analysis_task.execute()
+    
+    # Parse the result to extract categories and sentiment
     categories = []
     sentiment = {'positive': 0, 'neutral': 0, 'negative': 0}
     
     # Extract categories
-    pattern_category = r'(?:Category|Theme|Topic|Area|Issue)\s*(?:\d+)?\s*[:\-]\s*([^\n]+)'
-    category_matches = re.findall(pattern_category, text, re.IGNORECASE)
+    category_pattern = r'([\w\s/]+):\s*(\d+)'
+    category_section = False
+    sentiment_section = False
     
-    for i, category in enumerate(category_matches[:6]):  # Limit to 6 categories
-        # Try to find mentions or counts
-        count_pattern = r'{}.*?(?:(\d+)\s*(?:mentions|users|occurrences|times)|mentioned\s*(?:by)?\s*(\d+))'.format(re.escape(category))
-        count_match = re.search(count_pattern, text, re.IGNORECASE)
+    for line in result.split('\n'):
+        if 'CATEGORIES:' in line:
+            category_section = True
+            sentiment_section = False
+            continue
+        elif 'SENTIMENT:' in line:
+            category_section = False
+            sentiment_section = True
+            continue
         
-        count = int(count_match.group(1) or count_match.group(2)) if count_match else i + 1
-        categories.append({
-            "category": category.strip(),
-            "count": count
-        })
+        if category_section:
+            category_match = re.search(category_pattern, line)
+            if category_match:
+                category_name = category_match.group(1).strip()
+                count = int(category_match.group(2))
+                if count > 0:  # Only include categories with counts > 0
+                    categories.append({"category": category_name, "count": count})
+        
+        if sentiment_section:
+            if 'Positive:' in line:
+                match = re.search(r'Positive:\s*(\d+)%', line)
+                if match:
+                    sentiment['positive'] = int(match.group(1))
+            elif 'Neutral:' in line:
+                match = re.search(r'Neutral:\s*(\d+)%', line)
+                if match:
+                    sentiment['neutral'] = int(match.group(1))
+            elif 'Negative:' in line:
+                match = re.search(r'Negative:\s*(\d+)%', line)
+                if match:
+                    sentiment['negative'] = int(match.group(1))
     
-    # Sort by count
-    categories.sort(key=lambda x: x["count"], reverse=True)
+    # Sort categories by count in descending order
+    categories = sorted(categories, key=lambda x: x["count"], reverse=True)
     
-    # Extract sentiment
-    sentiment_pattern = r'(?:Sentiment|Tone).*?(?:positive|neutral|negative).*?(\d+)%.*?(?:positive|neutral|negative).*?(\d+)%.*?(?:positive|neutral|negative).*?(\d+)%'
-    sentiment_match = re.search(sentiment_pattern, text, re.IGNORECASE | re.DOTALL)
+    # If no categories were found, use default categories
+    if not categories:
+        categories = get_default_categories()
     
-    if sentiment_match:
-        # Extract percentages
-        percentages = [int(p) for p in sentiment_match.groups()]
-        
-        # Determine which is which based on context
-        positive_pattern = r'positive.*?(\d+)%'
-        neutral_pattern = r'neutral.*?(\d+)%'
-        negative_pattern = r'negative.*?(\d+)%'
-        
-        positive_match = re.search(positive_pattern, text, re.IGNORECASE)
-        neutral_match = re.search(neutral_pattern, text, re.IGNORECASE)
-        negative_match = re.search(negative_pattern, text, re.IGNORECASE)
-        
-        sentiment['positive'] = int(positive_match.group(1)) if positive_match else percentages[0]
-        sentiment['neutral'] = int(neutral_match.group(1)) if neutral_match else percentages[1]
-        sentiment['negative'] = int(negative_match.group(1)) if negative_match else percentages[2]
+    # If sentiment doesn't add up to 100%, use default sentiment
+    if sum(sentiment.values()) != 100:
+        sentiment = get_default_sentiment()
     
     return categories, sentiment
 
-def get_sample_categories():
-    """Provide sample categories when extraction fails"""
+def get_default_categories():
+    """Provide default empty categories with the standard structure"""
     return [
-        {"category": "UI/UX Issues", "count": 8},
-        {"category": "Performance Problems", "count": 6},
-        {"category": "Feature Requests", "count": 5},
-        {"category": "Usability Concerns", "count": 4},
-        {"category": "Documentation Needs", "count": 3}
+        {"category": "UI/UX Issues", "count": 0},
+        {"category": "Performance Problems", "count": 0},
+        {"category": "Feature Requests", "count": 0},
+        {"category": "Usability Concerns", "count": 0},
+        {"category": "Documentation Needs", "count": 0}
     ]
+
+def get_default_sentiment():
+    """Provide balanced default sentiment when analysis fails"""
+    return {
+        'positive': 33,
+        'neutral': 34,
+        'negative': 33
+    }
+
+# This function has been removed as we now use the LLM for sentiment analysis
 
 def get_sample_sentiment():
     """Provide sample sentiment when extraction fails"""

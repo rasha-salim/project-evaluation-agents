@@ -16,11 +16,15 @@ import time
 import os
 import re
 from dotenv import load_dotenv
-from feature_visualizations import render_feature_details_table, render_feature_details
-from technical_visualizations import render_technical_evaluation_visualization
-from stakeholder_visualizations import render_stakeholder_update_visualization
 from feedback_visualizations import render_feedback_analysis_visualization
+from feature_visualizations import render_feature_details_table
+from feature_extraction import extract_features_with_llm, render_feature_matrix
+from technical_extraction import extract_technical_evaluation_with_llm, render_technical_evaluation
+from sprint_extraction import extract_sprint_plan_with_llm, render_sprint_plan
+from stakeholder_extraction import extract_stakeholder_update_with_llm, render_stakeholder_update
+from technical_visualizations import render_technical_evaluation_visualization
 from sprint_visualizations import render_sprint_plan_visualization
+from stakeholder_visualizations import render_stakeholder_update_visualization
 from direct_agents.agent import Agent
 from direct_agents.task import Task
 from direct_agents.crew import Crew
@@ -630,8 +634,8 @@ else:
                 # Add visualizations at the top
                 st.markdown('<div class="section-title">📊 Feedback Analysis Visualizations</div>', unsafe_allow_html=True)
                 
-                # Render the feedback analysis visualizations
-                render_feedback_analysis_visualization(feedback_analysis)
+                # Render the feedback analysis visualizations with raw feedback data
+                render_feedback_analysis_visualization(feedback_analysis, st.session_state.feedback_data)
                 
                 # Display the raw text below the visualizations
                 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -767,136 +771,84 @@ SELECTED CATEGORIES:
             feature_proposals = st.session_state.result.get("generate_features", "")
             
             if feature_proposals:
-                # Extract features and their details using regex
-                features = []
+                # Add visualizations at the top
+                st.markdown('<div class="section-title">📊 Feature Visualizations</div>', unsafe_allow_html=True)
                 
-                # Try to find numbered features (1. Feature Name:)
-                feature_pattern = r'\d+\.\s+([^:\n]+)(?::|\n)([^\n]+)'
-                matches = re.findall(feature_pattern, feature_proposals)
-                
-                if matches:
-                    for match in matches:
-                        feature_name = match[0].strip()
-                        feature_desc = match[1].strip() if len(match) > 1 else ""
-                        
-                        # Try to determine priority and complexity
-                        priority = "Medium"
-                        if re.search(r'high\s+priority|critical|urgent', feature_desc.lower()):
-                            priority = "High"
-                        elif re.search(r'low\s+priority|nice\s+to\s+have', feature_desc.lower()):
-                            priority = "Low"
-                        
-                        complexity = "Medium"
-                        if re.search(r'complex|difficult|challenging|hard', feature_desc.lower()):
-                            complexity = "High"
-                        elif re.search(r'simple|easy|straightforward', feature_desc.lower()):
-                            complexity = "Low"
-                        
-                        features.append({
-                            "name": feature_name,
-                            "description": feature_desc,
-                            "priority": priority,
-                            "complexity": complexity
-                        })
-                
-                # If we have features, create visualizations at the top
-                if features:
-                    st.markdown('<div class="section-title">📊 Feature Visualizations</div>', unsafe_allow_html=True)
+                # Use LLM to extract features from the feature proposals text
+                try:
+                    # Extract features using the LLM
+                    feature_data = extract_features_with_llm(feature_proposals)
                     
-                    # Create a simplified visualization using HTML instead of Plotly
-                    # This should be more lightweight and reduce freezing
+                    # Extract the features list and user priority focus from the returned data
+                    features_list = feature_data.get('features', [])
+                    user_priority_focus = feature_data.get('user_priority_focus')
                     
-                    # Count features by priority and complexity
-                    priority_counts = {"Low": 0, "Medium": 0, "High": 0}
-                    complexity_counts = {"Low": 0, "Medium": 0, "High": 0}
-                    priority_complexity_matrix = {
-                        "Low": {"Low": [], "Medium": [], "High": []},
-                        "Medium": {"Low": [], "Medium": [], "High": []},
-                        "High": {"Low": [], "Medium": [], "High": []}
-                    }
-                    
-                    for feature in features:
-                        priority = feature["priority"]
-                        complexity = feature["complexity"]
-                        priority_counts[priority] += 1
-                        complexity_counts[complexity] += 1
-                        priority_complexity_matrix[priority][complexity].append(feature["name"])
-                    
-                    # Create a matrix visualization using HTML
-                    matrix_html = '''
-                    <div style="margin-top: 20px; margin-bottom: 20px;">
-                        <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-                            <tr>
-                                <th style="border: 1px solid #ddd; padding: 15px; background-color: #673AB7; color: white;">Priority / Complexity</th>
-                                <th style="border: 1px solid #ddd; padding: 15px; background-color: #673AB7; color: white;">Low Complexity</th>
-                                <th style="border: 1px solid #ddd; padding: 15px; background-color: #673AB7; color: white;">Medium Complexity</th>
-                                <th style="border: 1px solid #ddd; padding: 15px; background-color: #673AB7; color: white;">High Complexity</th>
-                            </tr>
-                    '''
-                    
-                    # Priority rows
-                    for priority in ["High", "Medium", "Low"]:
-                        matrix_html += f'''
-                        <tr>
-                            <td style="border: 1px solid #ddd; padding: 15px; font-weight: bold; background-color: {'#EF5350' if priority == 'High' else '#FFB74D' if priority == 'Medium' else '#90CAF9'}; color: white;">{priority} Priority</td>
-                        '''
-                        
-                        # Complexity columns
-                        for complexity in ["Low", "Medium", "High"]:
-                            features_in_cell = priority_complexity_matrix[priority][complexity]
-                            cell_color = "#E8F5E9" if priority == "High" and complexity == "Low" else \
-                                         "#FFF9C4" if (priority == "High" and complexity == "Medium") or (priority == "Medium" and complexity == "Low") else \
-                                         "#FFEBEE" if priority == "High" and complexity == "High" else \
-                                         "#E3F2FD" if priority == "Low" and complexity == "Low" else \
-                                         "#F5F5F5"
-                            
-                            feature_list = "<br>".join([f"• {name}" for name in features_in_cell]) if features_in_cell else "None"
-                            
-                            matrix_html += f'''
-                            <td style="border: 1px solid #ddd; padding: 15px; vertical-align: top; background-color: {cell_color};">
-                                {feature_list}
-                            </td>
-                            '''
-                        
-                        matrix_html += "</tr>"
-                    
-                    matrix_html += "</table></div>"
-                    
-                    # Display the matrix using components.html instead of markdown
-                    components.html(matrix_html, height=300)
+                    # Render the priority/complexity matrix
+                    render_feature_matrix(features_list)
                     
                     # Create a table of features with color coding
                     st.markdown('<div class="section-title">📝 Feature Details</div>', unsafe_allow_html=True)
                     
-                    # Use our new component to render the feature details table
-                    render_feature_details_table(features)
-                    
-                    # Display the raw text below the visualizations
-                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="section-title">📖 Detailed Feature Proposals</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                    st.markdown(feature_proposals)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    # Use our component to render the feature details table
+                    render_feature_details_table(features_list)
+                except Exception as e:
+                    st.error(f"Error extracting features: {str(e)}")
+                    st.info("Displaying raw feature proposals instead.")
+                
+                # Display the raw text below the visualizations
+                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-title">📖 Detailed Feature Proposals</div>', unsafe_allow_html=True)
+                st.markdown('<div class="result-container">', unsafe_allow_html=True)
+                st.markdown(feature_proposals)
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="result-container">No feature proposals available</div>', unsafe_allow_html=True)
         
         # Technical Evaluation tab
         with tabs[2]:
-            st.markdown('<div class="subheader">⚙️ Technical Evaluation</div>', unsafe_allow_html=True)
+            st.markdown('<div class="subheader">🔧 Technical Evaluation</div>', unsafe_allow_html=True)
             
             # Get technical evaluation text
-            tech_eval = st.session_state.result.get("evaluate_feasibility", "")
+            technical_eval = st.session_state.result.get("evaluate_feasibility", "")
             
-            if tech_eval:
-                # Add visualization at the top
-                st.markdown('<div class="section-title">📊 Technical Feasibility Analysis</div>', unsafe_allow_html=True)
-                render_technical_evaluation_visualization(tech_eval)
+            if technical_eval:
+                # Add visualizations at the top
+                st.markdown('<div class="section-title">📊 Technical Visualizations</div>', unsafe_allow_html=True)
                 
-                # Display the raw text below the visualizations
+                # Check if there's a user priority focus
+                user_priority_focus = None
+                if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
+                    priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", st.session_state.enhanced_feedback_analysis)
+                    if priority_match:
+                        user_priority_focus = priority_match.group(1).strip()
+                
+                # Use LLM to extract technical evaluation data
+                try:
+                    # Extract technical evaluation data using the LLM with priority focus
+                    tech_eval_data = extract_technical_evaluation_with_llm(technical_eval, user_priority_focus)
+                    
+                    # Make sure the tech_eval_data is in the expected format
+                    if isinstance(tech_eval_data, dict) and 'features' in tech_eval_data:
+                        # Render the technical evaluation visualizations
+                        render_technical_evaluation(tech_eval_data)
+                    else:
+                        # If the data is not in the expected format, create the expected structure
+                        formatted_data = {
+                            'features': tech_eval_data if isinstance(tech_eval_data, list) else [],
+                            'user_priority_focus': user_priority_focus
+                        }
+                        render_technical_evaluation(formatted_data)
+                except Exception as e:
+                    st.error(f"Error extracting technical evaluation data: {str(e)}")
+                    st.info("Displaying raw technical evaluation instead.")
+                    # Fallback to original visualization
+                    render_technical_evaluation_visualization(technical_eval)
+                
+                # Display the raw text below the visualization
                 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
                 st.markdown('<div class="section-title">📖 Detailed Technical Evaluation</div>', unsafe_allow_html=True)
                 st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                st.markdown(tech_eval)
+                st.markdown(technical_eval)
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="result-container">No technical evaluation available</div>', unsafe_allow_html=True)
@@ -909,11 +861,39 @@ SELECTED CATEGORIES:
             sprint_plan = st.session_state.result.get("create_sprint_plan", "")
             
             if sprint_plan:
-                # Add visualization at the top
-                st.markdown('<div class="section-title">📅 Sprint Timeline</div>', unsafe_allow_html=True)
-                render_sprint_plan_visualization(sprint_plan)
+                # Add visualizations at the top
+                st.markdown('<div class="section-title">📊 Sprint Visualizations</div>', unsafe_allow_html=True)
                 
-                # Display the raw text below the visualizations
+                # Check if there's a user priority focus
+                user_priority_focus = None
+                if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
+                    priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", st.session_state.enhanced_feedback_analysis)
+                    if priority_match:
+                        user_priority_focus = priority_match.group(1).strip()
+                
+                # Use LLM to extract sprint plan data
+                try:
+                    # Extract sprint plan data using the LLM with priority focus
+                    sprint_plan_data = extract_sprint_plan_with_llm(sprint_plan, user_priority_focus)
+                    
+                    # Make sure the sprint_plan_data is in the expected format
+                    if isinstance(sprint_plan_data, dict) and 'sprints' in sprint_plan_data:
+                        # Render the sprint plan visualizations
+                        render_sprint_plan(sprint_plan_data)
+                    else:
+                        # If the data is not in the expected format, create the expected structure
+                        formatted_data = {
+                            'sprints': sprint_plan_data if isinstance(sprint_plan_data, list) else [],
+                            'user_priority_focus': user_priority_focus
+                        }
+                        render_sprint_plan(formatted_data)
+                except Exception as e:
+                    st.error(f"Error extracting sprint plan data: {str(e)}")
+                    st.info("Displaying raw sprint plan instead.")
+                    # Fallback to original visualization
+                    render_sprint_plan_visualization(sprint_plan)
+                
+                # Display the raw text below the visualization
                 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
                 st.markdown('<div class="section-title">📖 Detailed Sprint Plan</div>', unsafe_allow_html=True)
                 st.markdown('<div class="result-container">', unsafe_allow_html=True)
@@ -924,17 +904,53 @@ SELECTED CATEGORIES:
         
         # Stakeholder Update tab
         with tabs[4]:
-            st.markdown('<div class="subheader">📢 Stakeholder Update</div>', unsafe_allow_html=True)
+            st.markdown('<div class="subheader">💼 Stakeholder Update</div>', unsafe_allow_html=True)
             
             # Get stakeholder update text
             stakeholder_update = st.session_state.result.get("generate_update", "")
             
             if stakeholder_update:
-                # Add visualization at the top
-                st.markdown('<div class="section-title">📊 Project Status Overview</div>', unsafe_allow_html=True)
-                render_stakeholder_update_visualization(stakeholder_update)
+                # Add visualizations at the top
+                st.markdown('<div class="section-title">📊 Stakeholder Insights</div>', unsafe_allow_html=True)
                 
-                # Display the raw text below the visualizations
+                # Check if there's a user priority focus
+                user_priority_focus = None
+                if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
+                    priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", st.session_state.enhanced_feedback_analysis)
+                    if priority_match:
+                        user_priority_focus = priority_match.group(1).strip()
+                
+                # Use LLM to extract stakeholder update data
+                try:
+                    # Extract stakeholder update data using the LLM with priority focus
+                    update_data = extract_stakeholder_update_with_llm(stakeholder_update, user_priority_focus)
+                    
+                    # Make sure the update_data is in the expected format
+                    if isinstance(update_data, dict):
+                        # Add user_priority_focus if it's not already in the data
+                        if user_priority_focus and 'user_priority_focus' not in update_data:
+                            update_data['user_priority_focus'] = user_priority_focus
+                        
+                        # Render the stakeholder update visualizations
+                        render_stakeholder_update(update_data)
+                    else:
+                        # If the data is not in the expected format, create the expected structure
+                        formatted_data = {
+                            'highlights': [],
+                            'metrics': [],
+                            'risks': [],
+                            'next_steps': [],
+                            'resources': [],
+                            'user_priority_focus': user_priority_focus
+                        }
+                        render_stakeholder_update(formatted_data)
+                except Exception as e:
+                    st.error(f"Error extracting stakeholder update data: {str(e)}")
+                    st.info("Displaying raw stakeholder update instead.")
+                    # Fallback to original visualization
+                    render_stakeholder_update_visualization(stakeholder_update)
+                
+                # Display the raw text below the visualization
                 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
                 st.markdown('<div class="section-title">📖 Detailed Stakeholder Update</div>', unsafe_allow_html=True)
                 st.markdown('<div class="result-container">', unsafe_allow_html=True)

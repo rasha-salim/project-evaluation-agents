@@ -7,9 +7,36 @@ def render_feature_details_table(features):
     Args:
         features: List of feature dictionaries with name, priority, complexity, and description
     """
+    # Check if we have user priority focus
+    has_priority_focus = any('user_priority_focus' in feature for feature in features if isinstance(feature, dict))
+    user_priority_focus = None
+    
+    if has_priority_focus:
+        for feature in features:
+            if 'user_priority_focus' in feature:
+                user_priority_focus = feature['user_priority_focus']
+                break
+    
+    # Create a priority focus banner if applicable
+    priority_banner = ""
+    priority_color = "#9575CD"  # Default color
+    
+    if has_priority_focus and user_priority_focus:
+        priority_color = "#FF7043" if "performance" in user_priority_focus.lower() else \
+                         "#42A5F5" if "user experience" in user_priority_focus.lower() else \
+                         "#66BB6A" if "new features" in user_priority_focus.lower() else "#9575CD"
+        
+        priority_banner = f'''
+        <div style="padding: 10px; background-color: {priority_color}; color: white; border-radius: 5px; margin-bottom: 15px; text-align: center;">
+            <h3 style="margin: 0;">Priority Focus: {user_priority_focus}</h3>
+            <p style="margin: 5px 0 0 0;">Features aligned with this priority are highlighted</p>
+        </div>
+        '''
+    
     # Create a styled table
-    html_table = '''
+    html_table = f'''
     <div style="overflow-x: auto;">
+    {priority_banner}
     <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
         <thead>
             <tr style="background-color: #673AB7; color: white;">
@@ -17,6 +44,7 @@ def render_feature_details_table(features):
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Priority</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Complexity</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Description</th>
+                {f'<th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Aligns with Priority</th>' if has_priority_focus else ''}
             </tr>
         </thead>
         <tbody>
@@ -27,12 +55,24 @@ def render_feature_details_table(features):
         priority_color = "#90CAF9" if feature["priority"] == "Low" else "#FFB74D" if feature["priority"] == "Medium" else "#EF5350"
         complexity_color = "#A5D6A7" if feature["complexity"] == "Low" else "#FFE082" if feature["complexity"] == "Medium" else "#FFAB91"
         
+        # Check if feature aligns with priority
+        aligns_with_priority = feature.get("aligns_with_priority", False) if has_priority_focus else False
+        row_style = f"background-color: {f'rgba({int(priority_color[1:3], 16)}, {int(priority_color[3:5], 16)}, {int(priority_color[5:7], 16)}, 0.2)' if aligns_with_priority else '#f9f9f9'};"
+        
+        # Create alignment indicator
+        alignment_cell = f'''
+            <td style="padding: 12px; text-align: center; border: 1px solid #ddd;">
+                {f'<span style="color: {priority_color}; font-weight: bold;">✓</span>' if aligns_with_priority else '–'}
+            </td>
+        ''' if has_priority_focus else ''
+        
         html_table += f'''
-        <tr style="background-color: #f9f9f9;">
+        <tr style="{row_style}">
             <td style="padding: 12px; text-align: left; border: 1px solid #ddd;">{feature["name"]}</td>
             <td style="padding: 12px; text-align: center; border: 1px solid #ddd; background-color: {priority_color};">{feature["priority"]}</td>
             <td style="padding: 12px; text-align: center; border: 1px solid #ddd; background-color: {complexity_color};">{feature["complexity"]}</td>
             <td style="padding: 12px; text-align: left; border: 1px solid #ddd;">{feature["description"]}</td>
+            {alignment_cell}
         </tr>
         '''
     
@@ -43,7 +83,7 @@ def render_feature_details_table(features):
     '''
     
     # Use components.html for the table
-    components.html(html_table, height=len(features) * 50 + 300)
+    components.html(html_table, height=len(features) * 50 + 350)
 
 def render_feature_details(feature):
     """
