@@ -35,6 +35,7 @@ The system demonstrates how agentic AI can transform product management from rea
 
 ### Key Features
 
+- **Interactive Feedback Workflow**: Collaborate with AI by reviewing feedback analysis, adjusting priorities, and adding notes before proceeding with further analysis
 - **Sequential and Parallel Processing Modes**: Choose between sequential or parallel agent execution
 - **CSV File Upload**: Upload feedback data via CSV files or use text input
 - **Interactive Visualizations**: Visual representations of agent outputs for better understanding
@@ -57,16 +58,15 @@ project-evolution-agents/
 │   ├── __init__.py
 │   ├── agent.py           # Agent class with direct Anthropic API integration
 │   ├── task.py            # Task class for defining and executing tasks
-│   └── crew.py            # Crew class for orchestrating agents and tasks
+│   └── crew.py            # Crew class for orchestrating multi-agent workflows
 ├── data/
 │   └── sample_feedback.csv # Sample feedback data
-├── direct_app.py          # Streamlit UI with direct Anthropic integration
-├── feedback_visualizations.py # Feedback analysis visualizations
+├── direct_app.py          # Streamlit UI with interactive feedback workflow
+├── feature_extraction.py  # Feature proposal extraction logic
+├── technical_extraction.py # Technical evaluation extraction logic
+├── sprint_extraction.py   # Sprint planning extraction logic
+├── stakeholder_extraction.py # Stakeholder update extraction logic
 ├── feature_visualizations.py  # Feature proposal visualizations
-├── technical_visualizations.py # Technical evaluation visualizations
-├── sprint_visualizations.py    # Sprint plan visualizations
-├── stakeholder_visualizations.py # Stakeholder update visualizations
-├── sample_visualizations.py   # Sample visualization functions
 ├── .env                    # Environment variables and API configuration
 ├── requirements.txt        # Dependencies
 └── README.md               # This file
@@ -102,7 +102,12 @@ This will launch a web interface where you can:
 - Select the execution mode (Sequential or Parallel)
 - Upload feedback data via CSV or use text input/sample data
 - Enter your Anthropic API key
-- Start and monitor the agent execution with real-time progress tracking
+- Start the analysis process with the "Run Analysis" button
+- Review feedback analysis results and collaborate by:
+  - Adding notes about the feedback
+  - Adjusting priorities for the next steps
+  - Confirming your input to continue the analysis
+- Monitor the agent execution with real-time progress tracking
 - View the outputs from each agent with interactive visualizations
 - See visual representations of feedback analysis, feature proposals, technical evaluations, sprint plans, and stakeholder updates
 
@@ -132,12 +137,34 @@ The application includes visualizations for each section:
    - Key achievements, challenges, and next steps visualization
 - Explore interactive visualizations of agent interactions
 
+## Interactive Feedback Workflow
+
+The application now features an interactive workflow that enables collaboration between users and AI agents:
+
+1. **Initial Feedback Analysis**
+   - Run the initial feedback analysis with the "Run Analysis" button
+   - Review the AI's analysis of user feedback, categorized by type and sentiment
+
+2. **User Collaboration**
+   - Add collaboration notes to provide additional context or insights
+   - Adjust priorities to focus the subsequent analysis on specific areas
+   - Submit your collaboration to guide the AI's further analysis
+
+3. **Continuing Analysis**
+   - After submitting your collaboration, the remaining analysis runs automatically
+   - All agents (Feature Strategist, Technical Feasibility, Sprint Planner, and Stakeholder Communicator) execute in sequence
+   - Results populate all tabs with their respective outputs and visualizations
+
+This workflow creates a more interactive and collaborative experience, allowing users to influence the analysis process at a critical decision point before committing to the full analysis.
+
 ## Use Cases
 
 This demonstration can be used to showcase:
 - How agentic AI can automate complex product management workflows
 - The benefits of using multiple specialized agents versus a single agent
 - Different orchestration patterns for agent collaboration
+- How to implement human-in-the-loop workflows with AI agents
+- The value of user collaboration and input in AI-driven analysis
 - How to implement autonomous decision-making with iteration capabilities
 - Visualizing agent interactions and collaboration metrics
 - Leveraging Anthropic's Claude model for complex reasoning tasks
@@ -167,7 +194,6 @@ This project is provided as an educational demonstration. Feel free to use and m
 ## Acknowledgments
 
 This project uses the following technologies:
-- [CrewAI](https://github.com/joaomdmoura/crewAI) framework for agent orchestration
 - [Anthropic Claude](https://www.anthropic.com/claude) for advanced language capabilities
 - [Streamlit](https://streamlit.io/) for the interactive web interface
 - [Matplotlib](https://matplotlib.org/) for data visualization

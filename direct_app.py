@@ -206,6 +206,14 @@ if "running" not in st.session_state:
     st.session_state.running = False
 if "result" not in st.session_state:
     st.session_state.result = None
+if "feedback_analysis_completed" not in st.session_state:
+    st.session_state.feedback_analysis_completed = False
+if "user_confirmed_next_steps" not in st.session_state:
+    st.session_state.user_confirmed_next_steps = False
+if "user_notes" not in st.session_state:
+    st.session_state.user_notes = ""
+if "user_priority_focus" not in st.session_state:
+    st.session_state.user_priority_focus = None
 if "feedback_data" not in st.session_state:
     st.session_state.feedback_data = None
 if "mode" not in st.session_state:
@@ -410,18 +418,158 @@ def create_agents_and_tasks(feedback_data):
     
     return crew
 
-def run_workflow():
-    """Run the project evolution workflow"""
+def run_feedback_analysis_only():
+    """Run only the feedback analysis part of the workflow"""
     try:
         # Reset progress
         st.session_state.progress = {}
         st.session_state.current_task = None
         st.session_state.task_status = {}
         
-        # Create crew with agents and tasks
-        # Use enhanced feedback analysis if available, otherwise use original feedback data
-        feedback_input = st.session_state.enhanced_feedback_analysis if st.session_state.user_collaboration_completed else st.session_state.feedback_data
-        crew = create_agents_and_tasks(feedback_input)
+        # Create feedback analyst agent
+        feedback_analyst = Agent(
+            role="Feedback Analyst",
+            goal="Analyze user feedback to identify patterns, priorities, and insights",
+            backstory="You are an expert in data analysis with a focus on user feedback. You excel at identifying patterns and extracting actionable insights from user comments.",
+            verbose=True
+        )
+        
+        # Create feedback analysis task
+        analyze_feedback_task = Task(
+            description=f"Analyze the following user feedback and identify key patterns, priorities, and insights:\n\n{st.session_state.feedback_data}",
+            agent=feedback_analyst,
+            expected_output="A detailed analysis of user feedback with key patterns, priorities, and insights."
+        )
+        
+        # Create crew with progress callback
+        crew = Crew(mode=st.session_state.mode, progress_callback=update_progress)
+        
+        # Add agent to crew
+        crew.add_agent("feedback_analyst", feedback_analyst)
+        
+        # Add task to crew
+        crew.add_task("analyze_feedback", analyze_feedback_task)
+        
+        # Run the feedback analysis
+        start_time = time.time()
+        result = crew.run()
+        end_time = time.time()
+        
+        # Add execution time to result
+        result["execution_time"] = f"{end_time - start_time:.2f} seconds"
+        result["execution_log"] = crew.get_execution_log()
+        
+        # Store the result in session state
+        st.session_state.feedback_analysis_result = result
+        
+        return result
+    except Exception as e:
+        st.error(f"Error running feedback analysis: {str(e)}")
+        return None
+
+
+def run_remaining_workflow():
+    """Run the remaining parts of the workflow after feedback analysis"""
+    try:
+        # Reset progress for the remaining tasks
+        st.session_state.progress = {}
+        st.session_state.current_task = None
+        st.session_state.task_status = {}
+        
+        # Get the enhanced feedback analysis with user input
+        feedback_input = st.session_state.enhanced_feedback_analysis
+        
+        # Create agents
+        feature_planner = Agent(
+            role="Feature Planner",
+            goal="Generate feature proposals based on user feedback analysis",
+            backstory="You are a product manager who specializes in translating user feedback into actionable feature proposals. You have a keen sense for prioritizing features that will have the greatest impact.",
+            verbose=True
+        )
+        
+        tech_evaluator = Agent(
+            role="Technical Evaluator",
+            goal="Evaluate the technical feasibility of proposed features",
+            backstory="You are a senior software architect with extensive experience in evaluating the technical feasibility of product features. You can quickly assess complexity, potential challenges, and implementation approaches.",
+            verbose=True
+        )
+        
+        sprint_planner = Agent(
+            role="Sprint Planner",
+            goal="Create a sprint plan based on feature proposals and technical evaluation",
+            backstory="You are an experienced agile project manager who excels at breaking down features into manageable sprint tasks. You know how to balance technical constraints with business priorities.",
+            verbose=True
+        )
+        
+        stakeholder_communicator = Agent(
+            role="Stakeholder Communicator",
+            goal="Generate clear and compelling updates for stakeholders",
+            backstory="You are a communication specialist who excels at translating technical information into clear, compelling updates for stakeholders. You know how to highlight the value and impact of planned work.",
+            verbose=True
+        )
+        
+        # Check if there are priority adjustments in the feedback data
+        priority_focus = None
+        if isinstance(feedback_input, str) and "PRIORITY ADJUSTMENT:" in feedback_input:
+            priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", feedback_input)
+            if priority_match:
+                priority_focus = priority_match.group(1).strip()
+        
+        # Get the feedback analysis from the previous run
+        feedback_analysis = st.session_state.feedback_analysis_result.get("analyze_feedback", "")
+        
+        # Create feature generation task with priority consideration
+        if priority_focus:
+            generate_features_task = Task(
+                description=f"Based on the following feedback analysis, generate feature proposals that specifically address the user's priority to {priority_focus}:\n\n{feedback_analysis}",
+                agent=feature_planner,
+                expected_output="A list of feature proposals with descriptions, priorities, and complexity estimates."
+            )
+        else:
+            generate_features_task = Task(
+                description=f"Based on the following feedback analysis, generate feature proposals:\n\n{feedback_analysis}",
+                agent=feature_planner,
+                expected_output="A list of feature proposals with descriptions, priorities, and complexity estimates."
+            )
+        
+        # Create technical evaluation task
+        evaluate_feasibility_task = Task(
+            description="Evaluate the technical feasibility of the proposed features. Consider implementation complexity, potential challenges, and required resources.",
+            agent=tech_evaluator,
+            expected_output="A technical evaluation of each proposed feature with complexity ratings and implementation considerations.",
+            dependencies=["generate_features"]
+        )
+        
+        # Create sprint planning task
+        create_sprint_plan_task = Task(
+            description="Create a sprint plan based on the feature proposals and technical evaluation. Break down features into tasks and allocate them across sprints.",
+            agent=sprint_planner,
+            expected_output="A sprint plan with features allocated to sprints, task breakdowns, and estimated timelines.",
+            dependencies=["generate_features", "evaluate_feasibility"]
+        )
+        
+        # Create stakeholder update task
+        generate_update_task = Task(
+            description="Generate a stakeholder update based on the feature proposals, technical evaluation, and sprint plan. Highlight the value and impact of the planned work.",
+            agent=stakeholder_communicator,
+            expected_output="A stakeholder update that clearly communicates the planned work, its value, and expected timeline.",
+            dependencies=["generate_features", "evaluate_feasibility", "create_sprint_plan"]
+        )
+        
+        # Create crew with progress callback
+        crew = Crew(mode=st.session_state.mode, progress_callback=update_progress)
+        
+        # Add agents to crew
+        crew.add_agent("feature_planner", feature_planner)
+        crew.add_agent("technical_evaluator", tech_evaluator)
+        crew.add_agent("sprint_planner", sprint_planner)
+        crew.add_agent("stakeholder_communicator", stakeholder_communicator)
+        
+        # Add tasks to crew
+        crew.add_task("generate_features", generate_features_task)
+        crew.add_task("evaluate_feasibility", evaluate_feasibility_task)
+        crew.add_task("create_sprint_plan", create_sprint_plan_task)
+        crew.add_task("generate_update", generate_update_task)
         
         # Run the crew
         start_time = time.time()
@@ -432,7 +580,33 @@ def run_workflow():
         result["execution_time"] = f"{end_time - start_time:.2f} seconds"
         result["execution_log"] = crew.get_execution_log()
         
+        # Add the feedback analysis to the result
+        result["analyze_feedback"] = feedback_analysis
+        
         return result
+    except Exception as e:
+        st.error(f"Error running remaining workflow: {str(e)}")
+        return None
+
+
+def run_workflow():
+    """Run the complete project evolution workflow"""
+    try:
+        # Check if we need to run the feedback analysis only
+        if not st.session_state.get("feedback_analysis_completed", False):
+            # Run only the feedback analysis
+            result = run_feedback_analysis_only()
+            
+            if result:
+                # Mark feedback analysis as completed
+                st.session_state.feedback_analysis_completed = True
+                return result
+            else:
+                return None
+        else:
+            # Return the feedback analysis result while waiting for user confirmation
+            # The Continue Analysis button in the feedback tab will handle running the remaining workflow
+            return st.session_state.feedback_analysis_result
     except Exception as e:
         st.error(f"Error running workflow: {str(e)}")
         return None
@@ -510,25 +684,52 @@ with st.sidebar:
                 st.error(f"Error processing CSV file: {str(e)}")
                 st.session_state.feedback_data = None
     
-    # Start/Stop buttons
+    # Start/Stop buttons - different behavior based on the current state
     col1, col2 = st.columns(2)
-    with col1:
-        start_button = st.button("▶️ Start", disabled=st.session_state.running)
-    with col2:
-        stop_button = st.button("⏹️ Stop", disabled=not st.session_state.running)
     
-    if start_button:
+    # Initialize button_clicked variable to avoid NameError
+    button_clicked = False
+    
+    with col1:
+        if not st.session_state.feedback_analysis_completed:
+            # Initial run button - only runs feedback analysis
+            start_button = st.button("▶️ Run Analysis", disabled=st.session_state.running)
+            button_clicked = start_button
+        else:
+            # Show that feedback analysis is complete
+            st.success("Analysis Complete! Please review and provide input in the Feedback Analysis tab.")
+            start_button = False
+    
+    with col2:
+        # Initialize stop_button variable to avoid NameError
+        stop_button = False
+        
+        if st.session_state.running:
+            stop_button = st.button("⏹️ Stop", disabled=False)
+        else:
+            # Show reset button when feedback analysis is completed
+            if st.session_state.feedback_analysis_completed:
+                reset_button = st.button("↻ Reset Workflow")
+                if reset_button:
+                    st.session_state.feedback_analysis_completed = False
+                    st.session_state.user_collaboration_completed = False
+                    st.session_state.user_confirmed_next_steps = False
+                    st.experimental_rerun()
+            else:
+                stop_button = st.button("⏹️ Stop", disabled=True)
+    
+    if button_clicked:
         if not st.session_state.feedback_data:
             st.error("Please provide feedback data")
         else:
             st.session_state.running = True
-            with st.spinner("Running agents..."):
+            with st.spinner("Running analysis..."):
                 st.session_state.result = run_workflow()
                 st.session_state.running = False
     
     if stop_button:
         st.session_state.running = False
-        st.success("Agents stopped")
+        st.success("Analysis stopped")
 
 # Main content area
 if st.session_state.running:
@@ -752,6 +953,161 @@ SELECTED CATEGORIES:
                     else:
                         st.success("Collaboration completed! The enhanced analysis will be used for generating feature proposals.")
                     
+                    # Add user confirmation interface for next steps
+                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="section-title">🔄 Next Steps</div>', unsafe_allow_html=True)
+                    
+                    if not st.session_state.get("user_confirmed_next_steps", False):
+                        st.info("Now that the feedback analysis is complete, you can proceed with the remaining analysis or make adjustments to your priorities.")
+                        
+                        # Options for next steps
+                        next_steps_options = [
+                            "Continue with AI analysis based on current priorities",
+                            "Adjust priorities before continuing",
+                            "Add more specific notes for the AI to consider"
+                        ]
+                        
+                        next_step_choice = st.radio("What would you like to do next?", next_steps_options)
+                        
+                        if next_step_choice == next_steps_options[0]:
+                            # User wants to continue with current priorities
+                            if st.button("Continue Analysis", key="proceed_button"):
+                                # Set running state
+                                st.session_state.running = True
+                                st.session_state.user_confirmed_next_steps = True
+                                
+                                # Run the remaining workflow directly
+                                with st.spinner("Running remaining analysis..."):
+                                    st.session_state.result = run_remaining_workflow()
+                                    
+                                    # Add the feedback analysis to the result to ensure all tabs have data
+                                    if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
+                                        st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
+                                    
+                                    # Mark the workflow as completed
+                                    st.session_state.workflow_completed = True
+                                
+                                # Reset running state
+                                st.session_state.running = False
+                                st.experimental_rerun()
+                        
+                        elif next_step_choice == next_steps_options[1]:
+                            # User wants to adjust priorities
+                            st.subheader("Adjust Priorities")
+                            priority_options = ["Prioritize Performance", "Prioritize User Experience", "Prioritize New Features", "Prioritize Security", "Prioritize Cost Reduction"]
+                            new_priority = st.selectbox("Select new priority focus:", priority_options)
+                            
+                            if st.button("Update Priority and Continue", key="update_priority_button"):
+                                # Update the enhanced feedback analysis with the new priority
+                                if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
+                                    # Replace existing priority
+                                    st.session_state.enhanced_feedback_analysis = re.sub(
+                                        r"PRIORITY ADJUSTMENT:.*?(?=\n\n|$)", 
+                                        f"PRIORITY ADJUSTMENT: {new_priority}", 
+                                        st.session_state.enhanced_feedback_analysis,
+                                        flags=re.DOTALL
+                                    )
+                                else:
+                                    # Add new priority
+                                    st.session_state.enhanced_feedback_analysis += f"\n\nPRIORITY ADJUSTMENT: {new_priority}"
+                                
+                                st.session_state.user_priority_focus = new_priority
+                                st.session_state.user_confirmed_next_steps = True
+                                
+                                # Set running state
+                                st.session_state.running = True
+                                
+                                # Run the remaining workflow directly
+                                with st.spinner("Running remaining analysis..."):
+                                    st.session_state.result = run_remaining_workflow()
+                                    
+                                    # Add the feedback analysis to the result to ensure all tabs have data
+                                    if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
+                                        st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
+                                    
+                                    # Mark the workflow as completed
+                                    st.session_state.workflow_completed = True
+                                
+                                # Reset running state
+                                st.session_state.running = False
+                                st.experimental_rerun()
+                        
+                        else:  # User wants to add more notes
+                            st.subheader("Additional Notes")
+                            additional_notes = st.text_area(
+                                "Add more specific notes or directions for the AI analysis",
+                                height=150,
+                                placeholder="Example: Focus on mobile performance issues specifically. The crash reports indicate problems with the image upload feature on Android devices."
+                            )
+                            
+                            if st.button("Add Notes and Continue", key="add_notes_button"):
+                                # Update the enhanced feedback analysis with additional notes
+                                if "USER COLLABORATION NOTES:" in st.session_state.enhanced_feedback_analysis:
+                                    # Find the user notes section and append to it
+                                    user_notes_pattern = r"(USER COLLABORATION NOTES:\s*.*?)(?=\n\n|$)"
+                                    user_notes_match = re.search(user_notes_pattern, st.session_state.enhanced_feedback_analysis, re.DOTALL)
+                                    
+                                    if user_notes_match:
+                                        current_notes = user_notes_match.group(1)
+                                        updated_notes = f"{current_notes}\n\nADDITIONAL NOTES: {additional_notes}"
+                                        st.session_state.enhanced_feedback_analysis = st.session_state.enhanced_feedback_analysis.replace(
+                                            current_notes, updated_notes
+                                        )
+                                    else:
+                                        # Append at the end if pattern not found
+                                        st.session_state.enhanced_feedback_analysis += f"\n\nADDITIONAL NOTES: {additional_notes}"
+                                else:
+                                    # Add new notes section
+                                    st.session_state.enhanced_feedback_analysis += f"\n\nUSER COLLABORATION NOTES:\n{additional_notes}"
+                                
+                                st.session_state.user_notes = additional_notes
+                                st.session_state.user_confirmed_next_steps = True
+                                
+                                # Set running state
+                                st.session_state.running = True
+                                
+                                # Run the remaining workflow directly
+                                with st.spinner("Running remaining analysis..."):
+                                    st.session_state.result = run_remaining_workflow()
+                                    
+                                    # Add the feedback analysis to the result to ensure all tabs have data
+                                    if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
+                                        st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
+                                    
+                                    # Mark the workflow as completed
+                                    st.session_state.workflow_completed = True
+                                
+                                # Reset running state
+                                st.session_state.running = False
+                                st.experimental_rerun()
+                    
+                    else:
+                        # User has already confirmed next steps and analysis is running or completed
+                        if st.session_state.get("workflow_completed", False):
+                            # Workflow is completed
+                            st.success("Analysis complete! All tabs have been populated with results.")
+                            st.markdown('''
+                            <div style="padding: 15px; background-color: #E8F5E9; border-radius: 5px; margin: 10px 0;">  
+                                <h4 style="margin-top: 0;">Analysis Complete!</h4>
+                                <p>All analysis steps have been completed. You can now explore the results in the tabs above.</p>
+                            </div>
+                            ''', unsafe_allow_html=True)
+                        else:
+                            # Analysis is still running
+                            st.info("Analysis is in progress... Please wait while the AI processes the remaining steps.")
+                            st.markdown('''
+                            <div style="padding: 15px; background-color: #E3F2FD; border-radius: 5px; margin: 10px 0;">  
+                                <h4 style="margin-top: 0;">Analysis Steps:</h4>
+                                <ol>
+                                    <li><strong>Feature Proposals</strong> - Generate feature ideas based on the feedback analysis</li>
+                                    <li><strong>Technical Evaluation</strong> - Assess the feasibility and complexity of proposed features</li>
+                                    <li><strong>Sprint Planning</strong> - Create a sprint plan for implementing the features</li>
+                                    <li><strong>Stakeholder Update</strong> - Generate a summary for stakeholders</li>
+                                </ol>
+                            </div>
+                            ''', unsafe_allow_html=True)
+                        # Remove this redundant else block as it's already handled above
+                    
                     # Option to view the enhanced analysis
                     with st.expander("View Enhanced Analysis", expanded=False):
                         st.markdown(st.session_state.enhanced_feedback_analysis)
@@ -759,6 +1115,7 @@ SELECTED CATEGORIES:
                     # Option to restart collaboration
                     if st.button("Restart Collaboration"):
                         st.session_state.user_collaboration_completed = False
+                        st.session_state.user_confirmed_next_steps = False
                         st.experimental_rerun()
             else:
                 st.markdown('<div class="result-container">No feedback analysis available</div>', unsafe_allow_html=True)
