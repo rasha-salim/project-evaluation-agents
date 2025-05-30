@@ -42,6 +42,9 @@ output/
 *.csv
 !data/sample_feedback.csv
 
+# Backup files
+backup/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
