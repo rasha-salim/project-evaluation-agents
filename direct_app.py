@@ -865,7 +865,7 @@ SELECTED CATEGORIES:
                             
                             # Reset running state
                             st.session_state.running = False
-                            st.experimental_rerun()
+                            st.rerun()
                     
                     # Option to skip feedback entirely
                     if st.button("Skip Feedback & Continue with AI Analysis"):
