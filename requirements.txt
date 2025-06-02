@@ -13,7 +13,7 @@ numpy>=1.24.0
 plotly>=5.14.0
 
 # File handling
-python-csv>=0.0.13
+# python-csv removed due to compatibility issues with Python 3.13
 
 # Date and time handling
 python-dateutil>=2.8.2
