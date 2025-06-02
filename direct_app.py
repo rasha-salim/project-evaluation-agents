@@ -895,7 +895,7 @@ SELECTED CATEGORIES:
                         
                         # Reset running state and refresh the page
                         st.session_state.running = False
-                        st.experimental_rerun()
+                        st.rerun()
                 
                 else:  # Feedback has been provided
                     # Display a summary of the user's feedback
