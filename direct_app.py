@@ -207,6 +207,8 @@ if "feedback_data" not in st.session_state:
     st.session_state.feedback_data = None
 if "mode" not in st.session_state:
     st.session_state.mode = "sequential"
+if "rerun_trigger" not in st.session_state:
+    st.session_state.rerun_trigger = False
 # Progress tracking variables removed as we now use a simplified progress UI with spinner
 
 # Simplified user feedback variables
@@ -865,7 +867,8 @@ SELECTED CATEGORIES:
                             
                             # Reset running state
                             st.session_state.running = False
-                            st.rerun()
+                            # Use a version-compatible way to rerun the app
+                            st.session_state.rerun_trigger = not st.session_state.get('rerun_trigger', False)
                     
                     # Option to skip feedback entirely
                     if st.button("Skip Feedback & Continue with AI Analysis"):
@@ -895,7 +898,8 @@ SELECTED CATEGORIES:
                         
                         # Reset running state and refresh the page
                         st.session_state.running = False
-                        st.rerun()
+                        # Use a version-compatible way to rerun the app
+                        st.session_state.rerun_trigger = not st.session_state.get('rerun_trigger', False)
                 
                 else:  # Feedback has been provided
                     # Display a summary of the user's feedback
