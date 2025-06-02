@@ -14,3 +14,6 @@ plotly>=5.14.0
 
 # File handling
 python-csv>=0.0.13
+
+# Date and time handling
+python-dateutil>=2.8.2

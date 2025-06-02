@@ -39,7 +39,7 @@ The system demonstrates how agentic AI can transform product management from rea
 - **Sequential and Parallel Processing Modes**: Choose between sequential or parallel agent execution
 - **CSV File Upload**: Upload feedback data via CSV files or use text input
 - **Interactive Visualizations**: Visual representations of agent outputs for better understanding
-- **Real-time Progress Tracking**: Monitor the status of each agent task as it executes
+- **Streamlined Workflow**: Simplified progress tracking with a clean, non-blocking interface
 - **Direct Anthropic Claude Integration**: Powered by Claude models for advanced reasoning capabilities
 
 ### Visualizations
@@ -62,11 +62,14 @@ project-evolution-agents/
 ├── data/
 │   └── sample_feedback.csv # Sample feedback data
 ├── direct_app.py          # Streamlit UI with interactive feedback workflow
+├── feedback_visualizations.py # Feedback analysis visualizations
 ├── feature_extraction.py  # Feature proposal extraction logic
+├── feature_visualizations.py  # Feature proposal visualizations
 ├── technical_extraction.py # Technical evaluation extraction logic
+├── technical_visualizations.py # Technical evaluation visualizations
 ├── sprint_extraction.py   # Sprint planning extraction logic
 ├── stakeholder_extraction.py # Stakeholder update extraction logic
-├── feature_visualizations.py  # Feature proposal visualizations
+├── stakeholder_visualizations.py # Stakeholder update visualizations
 ├── .env                    # Environment variables and API configuration
 ├── requirements.txt        # Dependencies
 └── README.md               # This file
@@ -117,6 +120,7 @@ The application includes visualizations for each section:
 
 1. **Feedback Analysis**
    - Category bar charts showing the frequency of different feedback categories
+   - Detailed categorized feedback tables with color-coded sections
    - Sentiment analysis with progress bars for positive, neutral, and negative feedback
 
 2. **Feature Proposals**
@@ -147,11 +151,12 @@ The application now features an interactive workflow that enables collaboration 
 
 2. **User Collaboration**
    - Add collaboration notes to provide additional context or insights
-   - Adjust priorities to focus the subsequent analysis on specific areas
+   - Select feedback categories to focus on, which automatically determines priority areas
    - Submit your collaboration to guide the AI's further analysis
 
 3. **Continuing Analysis**
    - After submitting your collaboration, the remaining analysis runs automatically
+   - A streamlined progress indicator shows the analysis status without blocking the UI
    - All agents (Feature Strategist, Technical Feasibility, Sprint Planner, and Stakeholder Communicator) execute in sequence
    - Results populate all tabs with their respective outputs and visualizations
 

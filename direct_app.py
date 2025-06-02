@@ -12,9 +12,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
 import plotly.graph_objects as go
-import time
-import os
-import re
 from dotenv import load_dotenv
 from feedback_visualizations import render_feedback_analysis_visualization
 from feature_visualizations import render_feature_details_table
@@ -210,12 +207,7 @@ if "feedback_data" not in st.session_state:
     st.session_state.feedback_data = None
 if "mode" not in st.session_state:
     st.session_state.mode = "sequential"
-if "progress" not in st.session_state:
-    st.session_state.progress = {}
-if "current_task" not in st.session_state:
-    st.session_state.current_task = None
-if "task_status" not in st.session_state:
-    st.session_state.task_status = {}
+# Progress tracking variables removed as we now use a simplified progress UI with spinner
 
 # Simplified user feedback variables
 if "feedback_status" not in st.session_state:
@@ -226,7 +218,9 @@ if "user_feedback" not in st.session_state:
         "priority_focus": None,
         "selected_categories": []
     }
-# For backward compatibility with existing code
+# For backward compatibility with existing visualization components and workflow logic
+# This variable is maintained alongside the newer feedback_status for now
+# Future refactoring should consolidate these into a single approach
 if "feedback_analysis_completed" not in st.session_state:
     st.session_state.feedback_analysis_completed = False
 
@@ -246,7 +240,8 @@ User 10: The app is much better than competitors, just needs better performance.
 
 def update_progress(task_id, status, index, total):
     """
-    Update progress in session state.
+    Simplified progress callback function.
+    Now only used for logging purposes as we've simplified the UI progress tracking.
     
     Args:
         task_id: ID of the current task
@@ -254,14 +249,9 @@ def update_progress(task_id, status, index, total):
         index: Index of the current task
         total: Total number of tasks
     """
-    # Update progress percentage
-    st.session_state.progress[task_id] = {
-        "status": status,
-        "index": index,
-        "total": total
-    }
-    st.session_state.current_task = task_id
-    st.session_state.task_status[task_id] = status
+    # We no longer update session state variables for detailed progress tracking
+    # This function is kept for compatibility with the Crew class
+    pass
 
 def create_agents_and_tasks(feedback_data):
     """
@@ -419,10 +409,6 @@ def create_agents_and_tasks(feedback_data):
 def run_feedback_analysis_only():
     """Run only the feedback analysis part of the workflow"""
     try:
-        # Reset progress
-        st.session_state.progress = {}
-        st.session_state.current_task = None
-        st.session_state.task_status = {}
         
         # Create feedback analyst agent
         feedback_analyst = Agent(
@@ -439,8 +425,8 @@ def run_feedback_analysis_only():
             expected_output="A detailed analysis of user feedback with key patterns, priorities, and insights."
         )
         
-        # Create crew with progress callback
-        crew = Crew(mode=st.session_state.mode, progress_callback=update_progress)
+        # Create crew
+        crew = Crew(mode=st.session_state.mode)
         
         # Add agent to crew
         crew.add_agent("feedback_analyst", feedback_analyst)
@@ -469,10 +455,6 @@ def run_feedback_analysis_only():
 def run_remaining_workflow():
     """Run the remaining parts of the workflow after feedback analysis"""
     try:
-        # Reset progress for the remaining tasks
-        st.session_state.progress = {}
-        st.session_state.current_task = None
-        st.session_state.task_status = {}
         
         # Get the enhanced feedback analysis with user input (for backward compatibility)
         feedback_input = st.session_state.enhanced_feedback_analysis
@@ -550,8 +532,8 @@ def run_remaining_workflow():
             dependencies=["generate_features", "evaluate_feasibility", "create_sprint_plan"]
         )
         
-        # Create crew with progress callback
-        crew = Crew(mode=st.session_state.mode, progress_callback=update_progress)
+        # Create crew
+        crew = Crew(mode=st.session_state.mode)
         
         # Add agents to crew
         crew.add_agent("feature_planner", feature_planner)
@@ -601,7 +583,9 @@ def run_workflow():
             else:
                 return None
         else:
-            # Sync with old variable for backward compatibility
+            # Sync with old variable for backward compatibility with visualization components
+            # This maintains the dual-state tracking (feedback_status and feedback_analysis_completed)
+            # which should be consolidated in future refactoring
             st.session_state.feedback_analysis_completed = True
             # Return the feedback analysis result while waiting for user confirmation
             # The Continue Analysis button in the feedback tab will handle running the remaining workflow
@@ -719,7 +703,9 @@ with st.sidebar:
                         "priority_focus": None,
                         "selected_categories": []
                     }
-                    # Reset for backward compatibility
+                    # Reset backward compatibility variables
+                    # These variables are maintained for compatibility with existing components
+                    # that expect these specific variables and formats
                     st.session_state.feedback_analysis_completed = False
                     if hasattr(st.session_state, "enhanced_feedback_analysis"):
                         st.session_state.enhanced_feedback_analysis = ""
@@ -840,14 +826,17 @@ else:
                             
                             # Mark feedback as completed
                             st.session_state.feedback_status = "completed"
-                            # Set feedback_analysis_completed for backward compatibility
+                            # Set feedback_analysis_completed for backward compatibility with existing visualization components
+                            # This variable is used by other parts of the application and should be maintained for now
                             st.session_state.feedback_analysis_completed = True
                             
                             # Set running state and run the remaining workflow
                             st.session_state.running = True
                             
                             with st.spinner("Running analysis with your feedback..."):
-                                # Create enhanced feedback analysis for backward compatibility
+                                # Create enhanced feedback analysis string format
+                                # This maintains backward compatibility with visualization components and other parts of the app
+                                # that expect this specific string format for parsing
                                 priority_text = ""
                                 if priority_focus:
                                     priority_text = f"\n\nPRIORITY ADJUSTMENT: {priority_focus}"
@@ -889,7 +878,8 @@ SELECTED CATEGORIES:
                         # Just use the original feedback analysis without any user input
                         st.session_state.enhanced_feedback_analysis = feedback_analysis
                         st.session_state.feedback_status = "completed"
-                        # Set feedback_analysis_completed for backward compatibility
+                        # Set feedback_analysis_completed for backward compatibility with existing visualization components
+                        # This variable is used by other parts of the application and should be maintained for now
                         st.session_state.feedback_analysis_completed = True
                         
                         # Set running state

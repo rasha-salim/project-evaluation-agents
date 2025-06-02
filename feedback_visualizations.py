@@ -1,3 +1,4 @@
+import streamlit as st
 import streamlit.components.v1 as components
 import re
 
@@ -39,10 +40,9 @@ def render_feedback_analysis_visualization(feedback_analysis_text, raw_feedback=
     
     # Create a bar chart for categories
     category_html = create_category_bars(categories)
-    components.html(category_html, height=len(categories) * 50 + 100)
+    components.html(category_html, height=len(categories) * 50 + 200)
     
     # Display categorized feedback details in a table
-    import streamlit as st
     st.markdown("<div class='section-title'>📋 Categorized Feedback Details</div>", unsafe_allow_html=True)
     categorized_feedback = extract_categorized_feedback(feedback_analysis_text, raw_feedback)
     display_categorized_feedback_table(categorized_feedback)
@@ -252,15 +252,7 @@ def get_default_sentiment():
         'negative': 33
     }
 
-# This function has been removed as we now use the LLM for sentiment analysis
-
-def get_sample_sentiment():
-    """Provide sample sentiment when extraction fails"""
-    return {
-        'positive': 40,
-        'neutral': 35,
-        'negative': 25
-    }
+# Sample sentiment data is now handled directly in the extraction functions
 
 def extract_categorized_feedback(feedback_analysis_text, raw_feedback=None):
     """Extract detailed feedback items by category from the feedback analysis text
