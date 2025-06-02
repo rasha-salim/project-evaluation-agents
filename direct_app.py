@@ -206,14 +206,6 @@ if "running" not in st.session_state:
     st.session_state.running = False
 if "result" not in st.session_state:
     st.session_state.result = None
-if "feedback_analysis_completed" not in st.session_state:
-    st.session_state.feedback_analysis_completed = False
-if "user_confirmed_next_steps" not in st.session_state:
-    st.session_state.user_confirmed_next_steps = False
-if "user_notes" not in st.session_state:
-    st.session_state.user_notes = ""
-if "user_priority_focus" not in st.session_state:
-    st.session_state.user_priority_focus = None
 if "feedback_data" not in st.session_state:
     st.session_state.feedback_data = None
 if "mode" not in st.session_state:
@@ -224,13 +216,19 @@ if "current_task" not in st.session_state:
     st.session_state.current_task = None
 if "task_status" not in st.session_state:
     st.session_state.task_status = {}
-# User collaboration variables
-if "user_collaboration_completed" not in st.session_state:
-    st.session_state.user_collaboration_completed = False
-if "user_feedback_notes" not in st.session_state:
-    st.session_state.user_feedback_notes = ""
-if "enhanced_feedback_analysis" not in st.session_state:
-    st.session_state.enhanced_feedback_analysis = ""
+
+# Simplified user feedback variables
+if "feedback_status" not in st.session_state:
+    st.session_state.feedback_status = "not_started"  # Possible values: not_started, completed
+if "user_feedback" not in st.session_state:
+    st.session_state.user_feedback = {
+        "notes": "",
+        "priority_focus": None,
+        "selected_categories": []
+    }
+# For backward compatibility with existing code
+if "feedback_analysis_completed" not in st.session_state:
+    st.session_state.feedback_analysis_completed = False
 
 # Sample feedback data
 SAMPLE_FEEDBACK = """
@@ -476,7 +474,7 @@ def run_remaining_workflow():
         st.session_state.current_task = None
         st.session_state.task_status = {}
         
-        # Get the enhanced feedback analysis with user input
+        # Get the enhanced feedback analysis with user input (for backward compatibility)
         feedback_input = st.session_state.enhanced_feedback_analysis
         
         # Create agents
@@ -508,12 +506,8 @@ def run_remaining_workflow():
             verbose=True
         )
         
-        # Check if there are priority adjustments in the feedback data
-        priority_focus = None
-        if isinstance(feedback_input, str) and "PRIORITY ADJUSTMENT:" in feedback_input:
-            priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", feedback_input)
-            if priority_match:
-                priority_focus = priority_match.group(1).strip()
+        # Get priority focus from the centralized user feedback structure
+        priority_focus = st.session_state.user_feedback.get("priority_focus")
         
         # Get the feedback analysis from the previous run
         feedback_analysis = st.session_state.feedback_analysis_result.get("analyze_feedback", "")
@@ -593,17 +587,22 @@ def run_workflow():
     """Run the complete project evolution workflow"""
     try:
         # Check if we need to run the feedback analysis only
-        if not st.session_state.get("feedback_analysis_completed", False):
+        if st.session_state.feedback_status == "not_started":
             # Run only the feedback analysis
             result = run_feedback_analysis_only()
             
             if result:
-                # Mark feedback analysis as completed
-                st.session_state.feedback_analysis_completed = True
+                # Store the feedback analysis result but don't mark as completed yet
+                # This allows the user to provide feedback before continuing
+                st.session_state.feedback_analysis_result = result
+                # Sync with old variable for backward compatibility
+                st.session_state.feedback_analysis_completed = False
                 return result
             else:
                 return None
         else:
+            # Sync with old variable for backward compatibility
+            st.session_state.feedback_analysis_completed = True
             # Return the feedback analysis result while waiting for user confirmation
             # The Continue Analysis button in the feedback tab will handle running the remaining workflow
             return st.session_state.feedback_analysis_result
@@ -708,12 +707,22 @@ with st.sidebar:
             stop_button = st.button("⏹️ Stop", disabled=False)
         else:
             # Show reset button when feedback analysis is completed
-            if st.session_state.feedback_analysis_completed:
+            if hasattr(st.session_state, "feedback_analysis_result") and st.session_state.feedback_analysis_result:
                 reset_button = st.button("↻ Reset Workflow")
                 if reset_button:
+                    # Reset all feedback-related state variables
+                    if hasattr(st.session_state, "feedback_analysis_result"):
+                        st.session_state.feedback_analysis_result = None
+                    st.session_state.feedback_status = "not_started"
+                    st.session_state.user_feedback = {
+                        "notes": "",
+                        "priority_focus": None,
+                        "selected_categories": []
+                    }
+                    # Reset for backward compatibility
                     st.session_state.feedback_analysis_completed = False
-                    st.session_state.user_collaboration_completed = False
-                    st.session_state.user_confirmed_next_steps = False
+                    if hasattr(st.session_state, "enhanced_feedback_analysis"):
+                        st.session_state.enhanced_feedback_analysis = ""
                     st.experimental_rerun()
             else:
                 stop_button = st.button("⏹️ Stop", disabled=True)
@@ -735,70 +744,14 @@ with st.sidebar:
 if st.session_state.running:
     st.markdown('''
 <div class="content-box" style="background-color: #E3F2FD; border-color: #2196F3;">
-    <div class="task-header" style="color: #2196F3;">🔄 Agents are running...</div>
-    <div class="info-text">The AI agents are analyzing your feedback data. This process may take a few minutes depending on the complexity of the data.</div>
+    <div class="task-header" style="color: #2196F3;">🔄 Analysis in progress...</div>
+    <div class="info-text">The AI agents are analyzing your feedback data. This process may take a few minutes.</div>
 </div>
 ''', unsafe_allow_html=True)
     
-    # Display progress
-    if st.session_state.progress:
-        # Create a container for progress display
-        progress_container = st.container()
-        
-        with progress_container:
-            st.markdown('<div class="content-box">', unsafe_allow_html=True)
-            # Show current task
-            if st.session_state.current_task:
-                st.markdown(f'<div class="subheader">🔄 Current Task: {st.session_state.current_task}</div>', unsafe_allow_html=True)
-            
-            # Show task statuses
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown('<div class="task-header">📊 Task Progress:</div>', unsafe_allow_html=True)
-                task_names = [
-                    "analyze_feedback",
-                    "generate_features",
-                    "evaluate_feasibility",
-                    "create_sprint_plan",
-                    "generate_update"
-                ]
-                
-                task_icons = {
-                    "analyze_feedback": "🔍",
-                    "generate_features": "💡",
-                    "evaluate_feasibility": "⚙️",
-                    "create_sprint_plan": "📅",
-                    "generate_update": "📢"
-                }
-                
-                for task_id in task_names:
-                    icon = task_icons.get(task_id, "📋")
-                    if task_id in st.session_state.task_status:
-                        status = st.session_state.task_status[task_id]
-                        if status == 'running':
-                            st.markdown(f'<div class="status-running">{icon} {task_id}: 🔄 In Progress</div>', unsafe_allow_html=True)
-                        elif status == 'completed':
-                            st.markdown(f'<div class="status-completed">{icon} {task_id}: ✅ Completed</div>', unsafe_allow_html=True)
-                        elif status == 'error':
-                            st.markdown(f'<div class="status-error">{icon} {task_id}: ❌ Error</div>', unsafe_allow_html=True)
-                        elif status == 'skipped':
-                            st.markdown(f'<div class="status-pending">{icon} {task_id}: ⏭️ Skipped</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div class="status-pending">{icon} {task_id}: ⏳ Pending</div>', unsafe_allow_html=True)
-            
-            with col2:
-                # Calculate overall progress
-                completed = sum(1 for status in st.session_state.task_status.values() 
-                               if status in ['completed', 'error', 'skipped'])
-                total = len(task_names)
-                progress = completed / total if total > 0 else 0
-                
-                st.markdown('<div class="task-header">📈 Overall Progress:</div>', unsafe_allow_html=True)
-                st.progress(progress)
-                st.markdown(f'<div style="text-align: center; font-size: 1.2rem; font-weight: bold; color: #673AB7;">{int(progress * 100)}% Complete</div>', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Display a simple spinner instead of detailed progress
+    st.spinner("Running analysis...")
+
 else:
     if st.session_state.result:
         st.markdown('''
@@ -838,248 +791,160 @@ else:
                 # Render the feedback analysis visualizations with raw feedback data
                 render_feedback_analysis_visualization(feedback_analysis, st.session_state.feedback_data)
                 
-                # Display the raw text below the visualizations
+                # Text section removed to reduce token usage
+                # st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
                 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">📖 Detailed Analysis</div>', unsafe_allow_html=True)
-                st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                st.markdown(feedback_analysis)
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-title">👥 Feedback & Priorities</div>', unsafe_allow_html=True)
                 
-                # Add user collaboration section
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">👥 Collaborate with AI</div>', unsafe_allow_html=True)
-                
-                # Check if collaboration is already completed
-                if not st.session_state.user_collaboration_completed:
-                    st.info("You can collaborate with the AI by adding your own insights or notes to the feedback analysis. This enhanced analysis will be used for generating feature proposals.")
-                    
-                    # Categories identified by the AI
-                    st.subheader("Key Categories Identified")
-                    categories_col1, categories_col2 = st.columns(2)
-                    
-                    # Extract categories from the feedback analysis (simplified example)
-                    categories = []
-                    category_pattern = r'(?:Category|Theme|Topic|Area|Issue)\s*(?:\d+)?\s*[:\-]\s*([^\n]+)'
-                    category_matches = re.findall(category_pattern, feedback_analysis, re.IGNORECASE)
-                    categories = [cat.strip() for cat in category_matches[:6]]
-                    
-                    # If no categories found, provide sample ones
-                    if not categories:
-                        categories = ["UI/UX Issues", "Performance Problems", "Feature Requests", "Usability Concerns", "Documentation Needs"]
-                    
-                    # Display categories with checkboxes
-                    selected_categories = []
-                    with categories_col1:
-                        for i, category in enumerate(categories[:3]):
-                            if st.checkbox(f"{category}", value=True, key=f"cat_{i}"):
-                                selected_categories.append(category)
-                    
-                    with categories_col2:
-                        for i, category in enumerate(categories[3:]):
-                            if st.checkbox(f"{category}", value=True, key=f"cat_{i+3}"):
-                                selected_categories.append(category)
-                    
-                    # User notes section
-                    st.subheader("Your Notes and Insights")
-                    user_notes = st.text_area(
-                        "Add your notes, insights or additional context",
-                        value=st.session_state.user_feedback_notes,
-                        height=150,
-                        placeholder="Example: Based on my experience, the performance issues are more critical than indicated. We should prioritize fixing the file upload crashes."
-                    )
-                    
-                    # Priority adjustment
-                    st.subheader("Adjust Priorities")
-                    priority_options = ["Keep AI's priorities", "Prioritize Performance", "Prioritize User Experience", "Prioritize New Features"]
-                    priority_choice = st.radio("Priority Focus:", priority_options)
-                    
-                    # Collaboration action buttons
-                    col1, col2, col3 = st.columns([1, 1, 1])
-                    with col1:
-                        if st.button("Submit Collaboration"):
-                            # Save user input to session state
-                            st.session_state.user_feedback_notes = user_notes
+                # Check if feedback has already been provided
+                if st.session_state.feedback_status == "not_started":
+                    # Create a clean, streamlined interface for user feedback
+                    with st.expander("Provide your feedback and priorities", expanded=True):
+                        # Extract categories from the feedback analysis
+                        categories = []
+                        category_pattern = r'(?:Category|Theme|Topic|Area|Issue)\s*(?:\d+)?\s*[:\-]\s*([^\n]+)'
+                        category_matches = re.findall(category_pattern, feedback_analysis, re.IGNORECASE)
+                        categories = [cat.strip() for cat in category_matches[:6]]
+                        
+                        # If no categories found, provide sample ones
+                        if not categories:
+                            categories = ["UI/UX Issues", "Performance Problems", "Feature Requests", "Usability Concerns", "Documentation Needs"]
+                        
+                        # Use a multiselect for categories instead of multiple checkboxes
+                        selected_categories = st.multiselect(
+                            "Select important categories to focus on:",
+                            options=categories,
+                            default=categories[:3]
+                        )
+                        
+                        # User notes in a single text area
+                        user_notes = st.text_area(
+                            "Your notes and insights:",
+                            height=100,
+                            placeholder="Add your insights or additional context about the feedback..."
+                        )
+                        
+                        # Single action button for submitting feedback and continuing
+                        if st.button("Submit Feedback & Continue Analysis", type="primary"):
+                            # Save all user feedback in a structured format
+                            # Derive priority focus from selected categories if any are selected
+                            priority_focus = None
+                            if selected_categories:
+                                priority_focus = f"Prioritize {', '.join(selected_categories)}"
+                                
+                            st.session_state.user_feedback = {
+                                "notes": user_notes,
+                                "priority_focus": priority_focus,
+                                "selected_categories": selected_categories
+                            }
                             
-                            # Create enhanced feedback analysis
-                            priority_text = ""
-                            if priority_choice != priority_options[0]:
-                                priority_text = f"\n\nPRIORITY ADJUSTMENT: {priority_choice}"
+                            # Mark feedback as completed
+                            st.session_state.feedback_status = "completed"
+                            # Set feedback_analysis_completed for backward compatibility
+                            st.session_state.feedback_analysis_completed = True
                             
-                            # Combine AI analysis with user input
-                            st.session_state.enhanced_feedback_analysis = f"""
-{feedback_analysis}
-
-USER COLLABORATION NOTES:
-{user_notes}
-{priority_text}
+                            # Set running state and run the remaining workflow
+                            st.session_state.running = True
+                            
+                            with st.spinner("Running analysis with your feedback..."):
+                                # Create enhanced feedback analysis for backward compatibility
+                                priority_text = ""
+                                if priority_focus:
+                                    priority_text = f"\n\nPRIORITY ADJUSTMENT: {priority_focus}"
+                                
+                                # Only include user notes if they're not empty
+                                notes_section = ""
+                                if user_notes.strip():
+                                    notes_section = f"\n\nUSER COLLABORATION NOTES:\n{user_notes}"
+                                
+                                st.session_state.enhanced_feedback_analysis = f"""
+{feedback_analysis}{notes_section}{priority_text}
 
 SELECTED CATEGORIES:
-{', '.join(selected_categories)}
+{', '.join(selected_categories) if selected_categories else 'None'}
 """
-                            st.session_state.user_collaboration_completed = True
+                                
+                                # Run the remaining workflow
+                                st.session_state.result = run_remaining_workflow()
+                                
+                                # Add the feedback analysis to the result
+                                if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
+                                    st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
+                                
+                                # Mark workflow as completed
+                                st.session_state.workflow_completed = True
+                            
+                            # Reset running state
+                            st.session_state.running = False
                             st.experimental_rerun()
                     
-                    with col3:
-                        if st.button("Skip Collaboration"):
-                            # Use original feedback analysis
-                            st.session_state.enhanced_feedback_analysis = feedback_analysis
-                            st.session_state.user_collaboration_completed = True
-                            st.experimental_rerun()
-                
-                else:
-                    # Extract priority focus if present
-                    priority_focus = None
-                    if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
-                        priority_match = re.search(r"PRIORITY ADJUSTMENT:\s*(.+?)(?:\n|$)", st.session_state.enhanced_feedback_analysis)
-                        if priority_match:
-                            priority_focus = priority_match.group(1).strip()
-                    
-                    # Show the enhanced feedback analysis with priority indicator
-                    if priority_focus:
-                        st.success(f"Collaboration completed! Your priority to {priority_focus} will be reflected in all subsequent steps.")
+                    # Option to skip feedback entirely
+                    if st.button("Skip Feedback & Continue with AI Analysis"):
+                        # Set default values
+                        st.session_state.user_feedback = {
+                            "notes": "",
+                            "priority_focus": None,
+                            "selected_categories": []
+                        }
+                        # Just use the original feedback analysis without any user input
+                        st.session_state.enhanced_feedback_analysis = feedback_analysis
+                        st.session_state.feedback_status = "completed"
+                        # Set feedback_analysis_completed for backward compatibility
+                        st.session_state.feedback_analysis_completed = True
                         
+                        # Set running state
+                        st.session_state.running = True
+                        
+                        with st.spinner("Running analysis..."):
+                            # Run the remaining workflow
+                            st.session_state.result = run_remaining_workflow()
+                            
+                            # Add the feedback analysis to the result
+                            if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
+                                st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
+                        
+                        # Reset running state and refresh the page
+                        st.session_state.running = False
+                        st.experimental_rerun()
+                
+                else:  # Feedback has been provided
+                    # Display a summary of the user's feedback
+                    priority_focus = st.session_state.user_feedback.get("priority_focus")
+                    
+                    if priority_focus:
                         # Create a visual indicator for the priority focus
-                        priority_color = "#FF7043" if "Performance" in priority_focus else \
-                                        "#42A5F5" if "User Experience" in priority_focus else \
-                                        "#66BB6A" if "New Features" in priority_focus else "#9575CD"
+                        # Determine color based on the first category mentioned
+                        priority_color = "#9575CD"  # Default purple
+                        
+                        # Check for specific keywords in the priority focus
+                        if "Performance" in priority_focus or "Speed" in priority_focus:
+                            priority_color = "#FF7043"  # Orange
+                        elif "User Experience" in priority_focus or "UI" in priority_focus or "UX" in priority_focus or "Usability" in priority_focus:
+                            priority_color = "#42A5F5"  # Blue
+                        elif "New Features" in priority_focus or "Feature" in priority_focus:
+                            priority_color = "#66BB6A"  # Green
+                        elif "Security" in priority_focus or "Privacy" in priority_focus:
+                            priority_color = "#FFC107"  # Yellow
+                        elif "Cost" in priority_focus or "Budget" in priority_focus:
+                            priority_color = "#E91E63"  # Pink
                         
                         priority_html = f'''
-                        <div style="padding: 15px; background-color: {priority_color}; color: white; border-radius: 5px; margin: 10px 0; text-align: center;">
+                        <div style="padding: 10px; background-color: {priority_color}; color: white; border-radius: 5px; margin: 10px 0; text-align: center;">
                             <h3 style="margin: 0;">Priority Focus: {priority_focus}</h3>
-                            <p style="margin: 5px 0 0 0;">This priority will influence feature proposals, technical evaluation, sprint planning, and stakeholder updates.</p>
                         </div>
                         '''
-                        components.html(priority_html, height=100)
-                    else:
-                        st.success("Collaboration completed! The enhanced analysis will be used for generating feature proposals.")
+                        components.html(priority_html, height=60)
                     
-                    # Add user confirmation interface for next steps
-                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="section-title">🔄 Next Steps</div>', unsafe_allow_html=True)
+                    # Show selected categories if any
+                    selected_categories = st.session_state.user_feedback.get("selected_categories", [])
+                    if selected_categories:
+                        st.write("**Selected categories:**", ", ".join(selected_categories))
                     
-                    if not st.session_state.get("user_confirmed_next_steps", False):
-                        st.info("Now that the feedback analysis is complete, you can proceed with the remaining analysis or make adjustments to your priorities.")
-                        
-                        # Options for next steps
-                        next_steps_options = [
-                            "Continue with AI analysis based on current priorities",
-                            "Adjust priorities before continuing",
-                            "Add more specific notes for the AI to consider"
-                        ]
-                        
-                        next_step_choice = st.radio("What would you like to do next?", next_steps_options)
-                        
-                        if next_step_choice == next_steps_options[0]:
-                            # User wants to continue with current priorities
-                            if st.button("Continue Analysis", key="proceed_button"):
-                                # Set running state
-                                st.session_state.running = True
-                                st.session_state.user_confirmed_next_steps = True
-                                
-                                # Run the remaining workflow directly
-                                with st.spinner("Running remaining analysis..."):
-                                    st.session_state.result = run_remaining_workflow()
-                                    
-                                    # Add the feedback analysis to the result to ensure all tabs have data
-                                    if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
-                                        st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
-                                    
-                                    # Mark the workflow as completed
-                                    st.session_state.workflow_completed = True
-                                
-                                # Reset running state
-                                st.session_state.running = False
-                                st.experimental_rerun()
-                        
-                        elif next_step_choice == next_steps_options[1]:
-                            # User wants to adjust priorities
-                            st.subheader("Adjust Priorities")
-                            priority_options = ["Prioritize Performance", "Prioritize User Experience", "Prioritize New Features", "Prioritize Security", "Prioritize Cost Reduction"]
-                            new_priority = st.selectbox("Select new priority focus:", priority_options)
-                            
-                            if st.button("Update Priority and Continue", key="update_priority_button"):
-                                # Update the enhanced feedback analysis with the new priority
-                                if "PRIORITY ADJUSTMENT:" in st.session_state.enhanced_feedback_analysis:
-                                    # Replace existing priority
-                                    st.session_state.enhanced_feedback_analysis = re.sub(
-                                        r"PRIORITY ADJUSTMENT:.*?(?=\n\n|$)", 
-                                        f"PRIORITY ADJUSTMENT: {new_priority}", 
-                                        st.session_state.enhanced_feedback_analysis,
-                                        flags=re.DOTALL
-                                    )
-                                else:
-                                    # Add new priority
-                                    st.session_state.enhanced_feedback_analysis += f"\n\nPRIORITY ADJUSTMENT: {new_priority}"
-                                
-                                st.session_state.user_priority_focus = new_priority
-                                st.session_state.user_confirmed_next_steps = True
-                                
-                                # Set running state
-                                st.session_state.running = True
-                                
-                                # Run the remaining workflow directly
-                                with st.spinner("Running remaining analysis..."):
-                                    st.session_state.result = run_remaining_workflow()
-                                    
-                                    # Add the feedback analysis to the result to ensure all tabs have data
-                                    if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
-                                        st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
-                                    
-                                    # Mark the workflow as completed
-                                    st.session_state.workflow_completed = True
-                                
-                                # Reset running state
-                                st.session_state.running = False
-                                st.experimental_rerun()
-                        
-                        else:  # User wants to add more notes
-                            st.subheader("Additional Notes")
-                            additional_notes = st.text_area(
-                                "Add more specific notes or directions for the AI analysis",
-                                height=150,
-                                placeholder="Example: Focus on mobile performance issues specifically. The crash reports indicate problems with the image upload feature on Android devices."
-                            )
-                            
-                            if st.button("Add Notes and Continue", key="add_notes_button"):
-                                # Update the enhanced feedback analysis with additional notes
-                                if "USER COLLABORATION NOTES:" in st.session_state.enhanced_feedback_analysis:
-                                    # Find the user notes section and append to it
-                                    user_notes_pattern = r"(USER COLLABORATION NOTES:\s*.*?)(?=\n\n|$)"
-                                    user_notes_match = re.search(user_notes_pattern, st.session_state.enhanced_feedback_analysis, re.DOTALL)
-                                    
-                                    if user_notes_match:
-                                        current_notes = user_notes_match.group(1)
-                                        updated_notes = f"{current_notes}\n\nADDITIONAL NOTES: {additional_notes}"
-                                        st.session_state.enhanced_feedback_analysis = st.session_state.enhanced_feedback_analysis.replace(
-                                            current_notes, updated_notes
-                                        )
-                                    else:
-                                        # Append at the end if pattern not found
-                                        st.session_state.enhanced_feedback_analysis += f"\n\nADDITIONAL NOTES: {additional_notes}"
-                                else:
-                                    # Add new notes section
-                                    st.session_state.enhanced_feedback_analysis += f"\n\nUSER COLLABORATION NOTES:\n{additional_notes}"
-                                
-                                st.session_state.user_notes = additional_notes
-                                st.session_state.user_confirmed_next_steps = True
-                                
-                                # Set running state
-                                st.session_state.running = True
-                                
-                                # Run the remaining workflow directly
-                                with st.spinner("Running remaining analysis..."):
-                                    st.session_state.result = run_remaining_workflow()
-                                    
-                                    # Add the feedback analysis to the result to ensure all tabs have data
-                                    if "analyze_feedback" not in st.session_state.result and "analyze_feedback" in st.session_state.feedback_analysis_result:
-                                        st.session_state.result["analyze_feedback"] = st.session_state.feedback_analysis_result["analyze_feedback"]
-                                    
-                                    # Mark the workflow as completed
-                                    st.session_state.workflow_completed = True
-                                
-                                # Reset running state
-                                st.session_state.running = False
-                                st.experimental_rerun()
+                    # Show user notes if any
+                    user_notes = st.session_state.user_feedback.get("notes", "")
+                    if user_notes:
+                        with st.expander("Your feedback notes"):
+                            st.write(user_notes)
                     
                     else:
                         # User has already confirmed next steps and analysis is running or completed
@@ -1112,10 +977,14 @@ SELECTED CATEGORIES:
                     with st.expander("View Enhanced Analysis", expanded=False):
                         st.markdown(st.session_state.enhanced_feedback_analysis)
                     
-                    # Option to restart collaboration
-                    if st.button("Restart Collaboration"):
-                        st.session_state.user_collaboration_completed = False
-                        st.session_state.user_confirmed_next_steps = False
+                    # Option to restart feedback
+                    if st.button("Restart Feedback"):
+                        st.session_state.feedback_status = "not_started"
+                        st.session_state.user_feedback = {
+                            "notes": "",
+                            "priority_focus": None,
+                            "selected_categories": []
+                        }
                         st.experimental_rerun()
             else:
                 st.markdown('<div class="result-container">No feedback analysis available</div>', unsafe_allow_html=True)
@@ -1152,12 +1021,12 @@ SELECTED CATEGORIES:
                     st.error(f"Error extracting features: {str(e)}")
                     st.info("Displaying raw feature proposals instead.")
                 
-                # Display the raw text below the visualizations
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">📖 Detailed Feature Proposals</div>', unsafe_allow_html=True)
-                st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                st.markdown(feature_proposals)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Text section removed to reduce token usage
+                # st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                # st.markdown('<div class="section-title">📖 Detailed Feature Proposals</div>', unsafe_allow_html=True)
+                # st.markdown('<div class="result-container">', unsafe_allow_html=True)
+                # st.markdown(feature_proposals)
+                # st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="result-container">No feature proposals available</div>', unsafe_allow_html=True)
         
@@ -1201,12 +1070,12 @@ SELECTED CATEGORIES:
                     # Fallback to original visualization
                     render_technical_evaluation_visualization(technical_eval)
                 
-                # Display the raw text below the visualization
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">📖 Detailed Technical Evaluation</div>', unsafe_allow_html=True)
-                st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                st.markdown(technical_eval)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Text section removed to reduce token usage
+                # st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                # st.markdown('<div class="section-title">📖 Detailed Technical Evaluation</div>', unsafe_allow_html=True)
+                # st.markdown('<div class="result-container">', unsafe_allow_html=True)
+                # st.markdown(technical_eval)
+                # st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="result-container">No technical evaluation available</div>', unsafe_allow_html=True)
         
@@ -1250,12 +1119,12 @@ SELECTED CATEGORIES:
                     # Fallback to original visualization
                     render_sprint_plan_visualization(sprint_plan)
                 
-                # Display the raw text below the visualization
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">📖 Detailed Sprint Plan</div>', unsafe_allow_html=True)
-                st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                st.markdown(sprint_plan)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Text section removed to reduce token usage
+                # st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                # st.markdown('<div class="section-title">📖 Detailed Sprint Plan</div>', unsafe_allow_html=True)
+                # st.markdown('<div class="result-container">', unsafe_allow_html=True)
+                # st.markdown(sprint_plan)
+                # st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="result-container">No sprint plan available</div>', unsafe_allow_html=True)
         
@@ -1307,12 +1176,12 @@ SELECTED CATEGORIES:
                     # Fallback to original visualization
                     render_stakeholder_update_visualization(stakeholder_update)
                 
-                # Display the raw text below the visualization
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">📖 Detailed Stakeholder Update</div>', unsafe_allow_html=True)
-                st.markdown('<div class="result-container">', unsafe_allow_html=True)
-                st.markdown(stakeholder_update)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Text section removed to reduce token usage
+                # st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                # st.markdown('<div class="section-title">📖 Detailed Stakeholder Update</div>', unsafe_allow_html=True)
+                # st.markdown('<div class="result-container">', unsafe_allow_html=True)
+                # st.markdown(stakeholder_update)
+                # st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="result-container">No stakeholder update available</div>', unsafe_allow_html=True)
         

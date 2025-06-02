@@ -41,6 +41,12 @@ def render_feedback_analysis_visualization(feedback_analysis_text, raw_feedback=
     category_html = create_category_bars(categories)
     components.html(category_html, height=len(categories) * 50 + 100)
     
+    # Display categorized feedback details in a table
+    import streamlit as st
+    st.markdown("<div class='section-title'>📋 Categorized Feedback Details</div>", unsafe_allow_html=True)
+    categorized_feedback = extract_categorized_feedback(feedback_analysis_text, raw_feedback)
+    display_categorized_feedback_table(categorized_feedback)
+    
     # Create a sentiment analysis visualization with increased height
     sentiment_html = create_sentiment_bars(sentiment)
     components.html(sentiment_html, height=200)  # Increased height for better visibility
@@ -256,35 +262,179 @@ def get_sample_sentiment():
         'negative': 25
     }
 
-def create_category_bars(categories):
-    """Create bar chart for feedback categories"""
-    # Calculate max count for percentage calculation
-    max_count = max([c["count"] for c in categories])
+def extract_categorized_feedback(feedback_analysis_text, raw_feedback=None):
+    """Extract detailed feedback items by category from the feedback analysis text
     
-    # Define colors for bars
-    colors = ["#4CAF50", "#2196F3", "#FF9800", "#9C27B0", "#F44336", "#607D8B"]
-    
-    # Create HTML for the bar chart
-    html = '''
-    <div style="margin-top: 20px; margin-bottom: 30px;">
-        <h3 style="margin-top: 0; color: #333; border-bottom: 2px solid #673AB7; padding-bottom: 8px;">Feedback Categories</h3>
-    '''
-    
-    # Add bars
-    for i, cat in enumerate(categories):
-        percentage = (cat["count"] / max_count) * 100
-        color = colors[i % len(colors)]
+    Args:
+        feedback_analysis_text: The feedback analysis text from the AI
+        raw_feedback: Optional raw feedback data to analyze if extraction fails
         
-        html += f'''
+    Returns:
+        dict: Dictionary with categories as keys and lists of feedback items as values
+    """
+    # Standard categories we want to extract
+    standard_categories = [
+        "UI/UX Issues", 
+        "Performance Problems", 
+        "Feature Requests", 
+        "Usability Concerns",
+        "Documentation Needs"
+    ]
+    
+    # Initialize the result dictionary
+    categorized_feedback = {category: [] for category in standard_categories}
+    
+    # Try to extract feedback items by category using regex patterns
+    for category in standard_categories:
+        # Create a pattern to find sections related to this category
+        # This looks for the category name followed by a list of items
+        category_pattern = rf"{category}[:\s-]*\n([\s\S]*?)(?:\n\n|\n[A-Z]|$)"
+        category_match = re.search(category_pattern, feedback_analysis_text, re.IGNORECASE)
+        
+        if category_match:
+            # Extract the content under this category
+            content = category_match.group(1).strip()
+            
+            # Split into individual items (looking for bullet points, numbers, or new lines)
+            items = re.split(r'\n\s*[-•*]\s*|\n\s*\d+\.\s*|\n\n', content)
+            
+            # Clean up the items and add them to the result
+            for item in items:
+                item = item.strip()
+                if item and len(item) > 5:  # Only add non-empty items with reasonable length
+                    categorized_feedback[category].append(item)
+    
+    # If extraction failed or found very few items, try to extract from raw feedback
+    total_items = sum(len(items) for items in categorized_feedback.values())
+    if total_items < 5 and raw_feedback:
+        # This is a simplified approach - in a real app, you might want to use
+        # a more sophisticated method like LLM categorization of each feedback item
+        for category in standard_categories:
+            # Look for keywords related to each category in the raw feedback
+            keywords = get_category_keywords(category)
+            
+            # Split raw feedback into lines or sentences
+            feedback_lines = re.split(r'\n|\. ', raw_feedback)
+            
+            for line in feedback_lines:
+                line = line.strip()
+                if line and len(line) > 10:  # Only consider substantial lines
+                    # Check if any keyword appears in this line
+                    if any(keyword.lower() in line.lower() for keyword in keywords):
+                        if line not in categorized_feedback[category]:  # Avoid duplicates
+                            categorized_feedback[category].append(line)
+    
+    return categorized_feedback
+
+def get_category_keywords(category):
+    """Get keywords associated with each feedback category
+    
+    Args:
+        category: The category name
+        
+    Returns:
+        list: List of keywords related to the category
+    """
+    keywords = {
+        "UI/UX Issues": ["ui", "ux", "interface", "design", "layout", "color", "button", "menu", "navigation", "dark mode", "theme"],
+        "Performance Problems": ["slow", "lag", "crash", "freeze", "performance", "speed", "loading", "memory", "battery", "resource"],
+        "Feature Requests": ["feature", "add", "implement", "include", "support", "integration", "functionality", "capability", "option"],
+        "Usability Concerns": ["usability", "difficult", "confusing", "intuitive", "learn", "understand", "workflow", "process", "steps"],
+        "Documentation Needs": ["documentation", "guide", "tutorial", "help", "example", "instruction", "explain", "unclear", "manual"]
+    }
+    
+    return keywords.get(category, [])
+
+def display_categorized_feedback_table(categorized_feedback):
+    """Display categorized feedback in a table format
+    
+    Args:
+        categorized_feedback: Dictionary with categories as keys and lists of feedback items as values
+    """
+    import streamlit as st
+    
+    # Create tabs for each category
+    categories = list(categorized_feedback.keys())
+    tabs = st.tabs(categories)
+    
+    # Define category colors for visual distinction
+    category_colors = {
+        "UI/UX Issues": "#42A5F5",  # Blue
+        "Performance Problems": "#FF7043",  # Orange
+        "Feature Requests": "#66BB6A",  # Green
+        "Usability Concerns": "#FFC107",  # Yellow
+        "Documentation Needs": "#9575CD"   # Purple
+    }
+    
+    # Display feedback items for each category in its tab
+    for i, category in enumerate(categories):
+        with tabs[i]:
+            items = categorized_feedback[category]
+            
+            if not items:
+                st.info(f"No specific {category} were identified in the feedback.")
+            else:
+                # Display each feedback item as a card with the category color
+                color = category_colors.get(category, "#9E9E9E")  # Default to gray if category not found
+                
+                for item in items:
+                    st.markdown(f"""
+                    <div style="padding: 10px; border-left: 4px solid {color}; 
+                                background-color: {color}10; margin-bottom: 10px; 
+                                border-radius: 4px;">
+                        {item}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+def create_category_bars(categories):
+    """Create bar chart for feedback categories
+    
+    Args:
+        categories: List of category dictionaries
+        
+    Returns:
+        str: HTML for the visualization
+    """
+    # Sort categories by count
+    sorted_categories = sorted(categories, key=lambda x: x['count'], reverse=True)
+    
+    # Create a bar chart for categories
+    html = f"""
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
+        <h3 style="color: #333; margin-bottom: 20px;">Feedback Categories</h3>
+    """
+    
+    # Define colors for different categories
+    category_colors = {
+        "UI/UX Issues": "#42A5F5",  # Blue
+        "Performance Problems": "#FF7043",  # Orange
+        "Feature Requests": "#66BB6A",  # Green
+        "Usability Concerns": "#FFC107",  # Yellow
+        "Documentation Needs": "#9575CD"   # Purple
+    }
+    
+    # Get the maximum count for scaling
+    max_count = max([c['count'] for c in sorted_categories]) if sorted_categories else 1
+    
+    # Create a bar for each category
+    for category in sorted_categories:
+        # Get the color for this category or use a default gray
+        color = category_colors.get(category['category'], "#9E9E9E")
+        
+        # Calculate the percentage width based on the count
+        width_percent = (category['count'] / max_count) * 100
+        
+        html += f"""
         <div style="margin-bottom: 15px;">
-            <div style="display: flex; align-items: center;">
-                <div style="width: 150px; text-align: right; padding-right: 15px; font-weight: 500;">{cat["category"]}</div>
-                <div style="flex-grow: 1; background-color: #E0E0E0; height: 24px; border-radius: 12px; overflow: hidden;">
-                    <div style="width: {percentage}%; height: 100%; background-color: {color}; display: flex; align-items: center; padding-left: 10px; color: white; font-weight: 500;">{cat["count"]}</div>
-                </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <div style="font-weight: 500;">{category['category']}</div>
+                <div>{category['count']} mentions</div>
+            </div>
+            <div style="height: 20px; background-color: #E0E0E0; border-radius: 4px; overflow: hidden;">
+                <div style="width: {width_percent}%; height: 100%; background-color: {color};"></div>
             </div>
         </div>
-        '''
+        """
     
     html += "</div>"
     
