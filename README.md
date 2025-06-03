@@ -36,7 +36,7 @@ The system demonstrates how agentic AI can transform product management from rea
 ### Key Features
 
 - **Interactive Feedback Workflow**: Collaborate with AI by reviewing feedback analysis, adjusting priorities, and adding notes before proceeding with further analysis
-- **Sequential and Parallel Processing Modes**: Choose between sequential or parallel agent execution
+- **Streamlined Sequential Processing**: Efficient sequential agent execution for predictable workflow
 - **CSV File Upload**: Upload feedback data via CSV files or use text input
 - **Interactive Visualizations**: Visual representations of agent outputs for better understanding
 - **Streamlined Workflow**: Simplified progress tracking with a clean, non-blocking interface

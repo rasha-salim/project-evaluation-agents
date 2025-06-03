@@ -615,10 +615,8 @@ with st.sidebar:
     if api_key:
         os.environ["ANTHROPIC_API_KEY"] = api_key
     
-    # Execution mode
-    st.markdown('<div class="task-header">🔄 Execution Mode</div>', unsafe_allow_html=True)
-    mode = st.radio("Select execution mode:", ["sequential", "parallel"])
-    st.session_state.mode = mode
+    # Mode is now fixed to sequential
+    st.session_state.mode = "sequential"
     
     # Feedback data
     st.markdown('<div class="task-header">📝 Feedback Data</div>', unsafe_allow_html=True)
