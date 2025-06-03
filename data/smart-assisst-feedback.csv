@@ -1,0 +1,31 @@
+date,user_id,feedback_type,description,severity,feature_area
+2025-05-28,user_001,bug,"AI response gets stuck in a loop when asking complex multi-part questions",4,conversational_ai
+2025-05-28,user_002,feature_request,"Would love to see integration with calendar apps for scheduling assistance",2,integrations
+2025-05-28,user_003,positive,"The document summarization feature is incredibly accurate and saves me hours",1,document_processing
+2025-05-28,user_004,bug,"Sometimes the voice recognition doesn't work properly in noisy environments",3,voice_interface
+2025-05-28,user_005,usability,"The interface is intuitive but could use better onboarding tutorials",2,user_interface
+2025-05-29,user_006,performance,"Response time is slower than expected for simple queries, takes 3-5 seconds",3,response_speed
+2025-05-29,user_007,positive,"Love how it remembers context from previous conversations in the same session",1,conversation_memory
+2025-05-29,user_008,bug,"File upload fails for PDFs larger than 10MB",4,file_handling
+2025-05-29,user_009,feature_request,"Need better support for non-English languages, especially for technical terms",2,language_support
+2025-05-29,user_010,usability,"Search functionality within chat history is hard to find and use",3,search_functionality
+2025-05-30,user_011,positive,"The code generation feature is outstanding - saves me so much development time",1,code_assistance
+2025-05-30,user_012,bug,"App crashes when trying to export long conversation histories",5,data_export
+2025-05-30,user_013,performance,"Memory usage gets very high after extended use, need to restart the app",4,memory_management
+2025-05-30,user_014,feature_request,"Would be great to have team collaboration features for shared AI conversations",2,collaboration
+2025-05-30,user_015,positive,"The fact-checking and source citation features give me confidence in the responses",1,accuracy_verification
+2025-05-31,user_016,usability,"Dark mode toggle is missing, which makes it hard to use during evening hours",2,user_interface
+2025-05-31,user_017,bug,"Formatting gets messed up when copying AI responses to other applications",3,copy_paste
+2025-05-31,user_018,performance,"Battery drain on mobile is significant during intensive AI conversations",3,mobile_optimization
+2025-05-31,user_019,positive,"The personalization features learn my preferences really well over time",1,personalization
+2025-05-31,user_020,feature_request,"Integration with project management tools like Asana or Jira would be valuable",2,integrations
+2025-06-01,user_001,usability,"Need better visual indicators when AI is processing vs when it's ready for input",2,user_feedback
+2025-06-01,user_003,bug,"Occasionally gives outdated information without warning about knowledge cutoff",3,information_accuracy
+2025-06-01,user_005,positive,"The email drafting assistance is phenomenal - tone and style are perfect",1,email_assistance
+2025-06-01,user_007,performance,"Offline mode doesn't work as expected - should cache recent conversations",3,offline_functionality
+2025-06-01,user_009,feature_request,"Need API access for developers to integrate SmartAssist into custom applications",1,api_access
+2025-06-01,user_011,bug,"Special characters in prompts sometimes cause unexpected formatting in responses",2,text_processing
+2025-06-01,user_013,usability,"Keyboard shortcuts would greatly improve productivity for power users",2,keyboard_navigation
+2025-06-01,user_015,positive,"Security features like data encryption give me peace of mind for sensitive work",1,security
+2025-06-01,user_017,performance,"Image analysis feature is slow and sometimes fails to recognize text in images",4,image_processing
+2025-06-01,user_019,feature_request,"Would love preset prompt templates for common tasks like meeting summaries",2,prompt_templates

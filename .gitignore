@@ -41,6 +41,7 @@ output/
 *.log
 *.csv
 !data/sample_feedback.csv
+!data/smart-assisst-feedback.csv
 
 # Backup files
 backup/
