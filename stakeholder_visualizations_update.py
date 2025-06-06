@@ -275,9 +275,9 @@ def render_action_items(update_data, has_priority_focus=False):
                 # Apply the styling if we have priority focus
                 if has_priority_focus and priority_resources:
                     styled_df = df.style.apply(highlight_priority, axis=1)
-                    st.dataframe(styled_df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+                    st.dataframe(styled_df, use_container_width=True, height=min(500, len(data) * 35 + 38))
                 else:
-                    st.dataframe(df, use_container_width=True, height=min(400, len(data) * 35 + 38))
+                    st.dataframe(df, use_container_width=True, height=min(500, len(data) * 35 + 38))
             else:
                 st.info("No resource needs available.")
     else:
